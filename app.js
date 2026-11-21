@@ -7,7 +7,7 @@ const KEYS = {
 
 // ضع رقم تليفونك (ورقم أي مشرف آخر) هنا بالأرقام فقط
 const ADMIN_PHONES = [
-  "01276341407"
+  "01276341407",
   "01144803016"
 ];
 
@@ -235,9 +235,6 @@ function applyRoleUI(user) {
   document.getElementById("defaultAllowanceInput").value = getAllowance();
   renderRepsList();
   renderTripsTable();
-  if (typeof renderClientAnalysis === "function") {
-    renderClientAnalysis();
-  }
 }
 
 function refreshRepSelect(user, isAdmin) {
@@ -278,7 +275,7 @@ function renderRepsList() {
           <div class="hint">${statusText}</div>
         </div>
       </div>
-      <button type="button" class="btn btn-danger" data-id="${rep.id}">حذف</button>
+      <button class="btn btn-danger" data-id="${rep.id}">حذف</button>
     `;
     li.querySelector("button").addEventListener("click", () => {
       const remaining = getAccounts().filter((x) => x.id !== rep.id);
@@ -322,11 +319,11 @@ function renderTripsTable() {
     totalAllowance += parseFloat(t.allowance) || 0;
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${escapeHtml(t.timestamp)}</td>
-      <td>${escapeHtml(t.date)}</td>
-      <td>${escapeHtml(t.repName)}</td>
-      <td>${escapeHtml(t.place)}</td>
-      <td>${escapeHtml(t.client)}</td>
+      <td>${t.timestamp}</td>
+      <td>${t.date}</td>
+      <td>${t.repName}</td>
+      <td>${t.place}</td>
+      <td>${t.client}</td>
       <td>${(parseFloat(t.allowance) || 0).toFixed(2)}</td>
     `;
     tbody.appendChild(tr);
@@ -487,9 +484,6 @@ function switchTab(tabId) {
   document.querySelectorAll(".tab-panel").forEach((p) => {
     p.classList.toggle("active", p.id === tabId);
   });
-  if (tabId === "analysisTab" && typeof renderClientAnalysis === "function") {
-    renderClientAnalysis();
-  }
 }
 
 function initSplashScreen() {
@@ -537,26 +531,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const user = getCurrentUser();
     if (!user) return;
 
-    const oldPhone = normalizePhone(user.phone);
-    const newPhone = normalizePhone(document.getElementById("updatePhoneInput").value);
     const currentPass = document.getElementById("currentPassInput").value;
     const newPass = document.getElementById("updatedPassInput").value;
     const newAvatar = await readImageAsDataUrl(document.getElementById("updateAvatarInput"));
 
     const patch = {};
-
-    if (newPhone && newPhone !== oldPhone) {
-      if (newPhone.length < 10) {
-        alert("من فضلك أدخل رقم تليفون صحيح.");
-        return;
-      }
-      const existingWithPhone = findAccountByPhone(newPhone);
-      if (existingWithPhone && existingWithPhone.id !== user.id) {
-        alert("رقم التليفون الجديد مسجل بالفعل لحساب آخر.");
-        return;
-      }
-      patch.phone = newPhone;
-    }
 
     if (newPass) {
       if (currentPass !== user.password) {
@@ -574,22 +553,12 @@ document.addEventListener("DOMContentLoaded", () => {
       patch.avatar = newAvatar;
     }
 
-    if (!patch.phone && !patch.password && !patch.avatar) {
-      alert("أدخل رقم تليفون جديد، أو كلمة سر جديدة، أو اختر صورة لتحديثها.");
+    if (!patch.password && !patch.avatar) {
+      alert("أدخل كلمة سر جديدة أو اختر صورة لتحديثها.");
       return;
     }
 
     const updated = updateAccount(user.id, patch);
-
-    if (patch.phone) {
-      localStorage.setItem(KEYS.session, patch.phone);
-      const updatedTrips = getTrips().map((t) =>
-        normalizePhone(t.ownerPhone) === oldPhone ? { ...t, ownerPhone: patch.phone } : t
-      );
-      setTrips(updatedTrips);
-    }
-
-    document.getElementById("updatePhoneInput").value = "";
     document.getElementById("currentPassInput").value = "";
     document.getElementById("updatedPassInput").value = "";
     document.getElementById("updateAvatarInput").value = "";
@@ -604,7 +573,6 @@ document.addEventListener("DOMContentLoaded", () => {
       b.classList.toggle("hidden", b.dataset.tab !== "analysisTab");
     });
     switchTab("analysisTab");
-    document.getElementById("userBadge").classList.remove("hidden");
     document.getElementById("userBadge").textContent = "وضع التحاليل (بدون نت)";
   });
 
@@ -640,9 +608,6 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("tripPlace").value = "";
     document.getElementById("tripClient").value = "";
     renderTripsTable();
-    if (typeof renderClientAnalysis === "function") {
-      renderClientAnalysis();
-    }
     alert("تم حفظ الرحلة وبدل السفر بنجاح.");
   });
 
