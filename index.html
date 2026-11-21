@@ -3,233 +3,270 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>مناديب الدلتا TAGADDOD - BY.ALI RAGAB</title>
+  <title>مناديب الدلتا - تجدد</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div id="splashScreen" class="splash-screen">
+    <div id="splashScreen" class="splash-screen">
     <img src="splash-banner.png" alt="مناديب الدلتا TAGADDOD - BY.ALI RAGAB" class="splash-img" />
     <div class="splash-caption">مناديب الدلتا TAGADDOD • BY.ALI RAGAB</div>
-    <button type="button" class="btn btn-outline" onclick="document.getElementById('splashScreen').style.display='none'">تخطي</button>
   </div>
-
-  <header class="app-header">
-    <div class="brand-box">
-      <img src="logo.png" alt="شعار التطبيق" class="brand-logo" />
+  <header class="topbar">
+    <div class="user-profile-header">
+      <img src="logo.png" alt="لوجو مناديب الدلتا" class="brand-logo" onerror="this.style.display='none'" />
+      <img id="headerAvatar" class="avatar hidden" alt="صورة المستخدم" />
       <div>
-        <h1>مناديب الدلتا TAGADDOD</h1>
-        <p class="subtitle">BY.ALI RAGAB • نظام إدارة الرحلات وبدل السفر والتحاليل</p>
+        <h1>مناديب الدلتا - تجدد</h1>
+        <span id="userBadge" class="badge">غير مسجل دخول</span>
       </div>
     </div>
-
     <div class="header-actions">
-      <img id="headerAvatar" src="" alt="صورة المستخدم" class="header-avatar hidden" />
-      <span id="userBadge" class="user-badge hidden"></span>
-      <button id="openChangePassBtn" type="button" class="btn btn-outline hidden">تعديل بياناتي</button>
-      <button id="logoutBtn" type="button" class="btn btn-danger hidden">خروج</button>
+      <button id="openChangePassBtn" class="btn btn-outline hidden">تغيير كلمة السر</button>
+      <button id="logoutBtn" class="btn btn-outline hidden">خروج</button>
     </div>
   </header>
 
-  <main class="container">
-    <!-- شاشة تسجيل الدخول أو إنشاء كلمة سر أول مرة -->
-    <section id="authSection" class="card auth-card">
-      <h2>تسجيل الدخول</h2>
-      <p class="hint">أدخل رقم تليفونك المسجل. إذا كانت هذه أول مرة لك، ستقوم بتعيين كلمة سر خاصة بك.</p>
+  <!-- شاشة الدخول برقم التليفون + حاسبة التحاليل بدون نت -->
+  <section id="authSection" class="card">
+    <div class="hero-banner-wrap">
+      <img
+        src="splash-banner.png"
+        alt="مناديب الدلتا TAGADDOD - BY.ALI RAGAB"
+        class="hero-banner-img"
+        onerror="this.style.display='none'"
+      />
+    </div>
 
-      <div class="field">
-        <label for="loginPhoneInput">رقم التليفون</label>
-        <input type="tel" id="loginPhoneInput" placeholder="مثال: 01276341407" />
-      </div>
+    <h2>تسجيل الدخول برقم التليفون</h2>
+    <p class="hint">أدخل رقم التليفون المسجل. إذا كانت هذه أول مرة لك، سيُطلب منك إنشاء كلمة سر جديدة.</p>
 
-      <div id="existingPassBox" class="field hidden">
-        <label for="loginPasswordInput">كلمة السر</label>
+    <div class="form-grid">
+      <label>
+        رقم التليفون
+        <input type="tel" id="loginPhoneInput" placeholder="مثال: 010xxxxxxxx" required />
+      </label>
+
+      <label id="existingPassBox" class="hidden">
+        كلمة السر
         <input type="password" id="loginPasswordInput" placeholder="أدخل كلمة السر" />
-      </div>
+      </label>
 
-      <div id="newPassBox" class="field hidden">
-        <label for="createPasswordInput">تعيين كلمة سر جديدة (4 خانات فأكثر)</label>
-        <input type="password" id="createPasswordInput" placeholder="اختر كلمة سر" />
-      </div>
+      <label id="newPassBox" class="hidden">
+        إنشاء كلمة سر جديدة (أول مرة)
+        <input type="password" id="createPasswordInput" placeholder="اختر كلمة سر (4 أحرف أو أرقام فأكثر)" />
+      </label>
 
-      <div id="confirmPassBox" class="field hidden">
-        <label for="confirmPasswordInput">تأكيد كلمة السر</label>
+      <label id="confirmPassBox" class="hidden">
+        تأكيد كلمة السر الجديدة
         <input type="password" id="confirmPasswordInput" placeholder="أعد كتابة كلمة السر" />
-      </div>
+      </label>
 
-      <div id="avatarSetupBox" class="field hidden">
-        <label for="loginAvatarInput">صورة شخصية (اختياري)</label>
+      <label id="avatarSetupBox" class="hidden">
+        صورتك الشخصية (اختياري)
         <input type="file" id="loginAvatarInput" accept="image/*" />
-      </div>
+      </label>
+    </div>
 
-      <div class="actions-row">
-        <button id="phoneAuthBtn" type="button" class="btn btn-primary">متابعة</button>
-        <button id="openOfflineAnalysisBtn" type="button" class="btn btn-outline">وضع التحاليل (بدون نت)</button>
-      </div>
-    </section>
+    <div class="actions-row">
+      <button id="phoneAuthBtn" class="btn btn-primary">متابعة</button>
+      <button id="openOfflineAnalysisBtn" class="btn btn-secondary">تحاليل العملاء (بدون نت)</button>
+    </div>
+  </section>
 
-    <!-- شاشة تعديل بيانات الحساب (رقم التليفون، كلمة السر، الصورة) -->
-    <section id="profileModalSection" class="card auth-card hidden">
-      <h2>تعديل بيانات الحساب</h2>
-      <p class="hint">يمكنك تحديث رقم التليفون أو كلمة السر أو الصورة الشخصية.</p>
-
-      <div class="field">
-        <label for="updatePhoneInput">رقم تليفون جديد (اختياري)</label>
-        <input type="tel" id="updatePhoneInput" placeholder="مثال: 01012345678" />
-      </div>
-
-      <div class="field">
-        <label for="currentPassInput">كلمة السر الحالية (مطلوبة عند تغيير كلمة السر)</label>
-        <input type="password" id="currentPassInput" placeholder="أدخل كلمة السر الحالية" />
-      </div>
-
-      <div class="field">
-        <label for="updatedPassInput">كلمة سر جديدة (اختياري - 4 خانات فأكثر)</label>
-        <input type="password" id="updatedPassInput" placeholder="أدخل كلمة السر الجديدة" />
-      </div>
-
-      <div class="field">
-        <label for="updateAvatarInput">تحديث الصورة الشخصية (اختياري)</label>
+  <!-- نافذة تغيير كلمة السر وتحديث الصورة -->
+  <section id="profileModalSection" class="card hidden">
+    <h2>إعدادات الحساب وتغيير كلمة السر</h2>
+    <div class="form-grid">
+      <label>
+        كلمة السر الحالية
+        <input type="password" id="currentPassInput" placeholder="كلمة السر الحالية" />
+      </label>
+      <label>
+        كلمة السر الجديدة
+        <input type="password" id="updatedPassInput" placeholder="كلمة السر الجديدة" />
+      </label>
+      <label>
+        تحديث الصورة الشخصية
         <input type="file" id="updateAvatarInput" accept="image/*" />
+      </label>
+    </div>
+    <div class="actions-row">
+      <button id="saveProfileChangesBtn" class="btn btn-primary">حفظ التعديلات</button>
+      <button id="closeProfileModalBtn" class="btn btn-secondary">إلغاء</button>
+    </div>
+  </section>
+
+  <!-- التطبيق الرئيسي بعد تسجيل الدخول -->
+  <main id="appSection" class="hidden">
+    <nav class="tabs">
+      <button class="tab-btn active" data-tab="newTripTab">تسجيل جديد</button>
+      <button class="tab-btn" data-tab="recordsTab">السجلات</button>
+      <button class="tab-btn" data-tab="analysisTab">تحاليل العملاء</button>
+      <button class="tab-btn admin-only hidden" data-tab="repsTab">المناديب</button>
+      <button class="tab-btn admin-only hidden" data-tab="allowanceTab">بدل السفر</button>
+    </nav>
+
+    <!-- تبويب تسجيل جديد -->
+    <section id="newTripTab" class="card tab-panel active">
+      <h2>تسجيل رحلة جديدة</h2>
+      <form id="tripForm" class="form-grid">
+        <label>
+          التاريخ
+          <input type="date" id="tripDate" required />
+        </label>
+        <label>
+          اسم المندوب
+          <select id="tripRepSelect" required></select>
+        </label>
+        <label>
+          المكان
+          <input type="text" id="tripPlace" placeholder="مثال: طنطا - السنطة" required />
+        </label>
+        <label>
+          اسم العميل
+          <input type="text" id="tripClient" placeholder="اسم العميل أو المخزن" required />
+        </label>
+        <label>
+          بدل السفر للرحلة (جنيه)
+          <input type="number" id="tripAllowance" step="0.01" readonly />
+        </label>
+        <div class="full-span">
+          <button type="submit" class="btn btn-primary">حفظ الرحلة</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- تبويب السجلات -->
+    <section id="recordsTab" class="card tab-panel">
+      <div class="section-header">
+        <h2>السجلات</h2>
+        <div id="recordsSummary" class="summary-pill"></div>
       </div>
 
-      <div class="actions-row">
-        <button id="saveProfileChangesBtn" type="button" class="btn btn-primary">حفظ التعديلات</button>
-        <button id="closeProfileModalBtn" type="button" class="btn btn-outline">رجوع</button>
+      <div class="export-bar">
+        <label>
+          من تاريخ
+          <input type="date" id="fromDate" />
+        </label>
+        <label>
+          إلى تاريخ
+          <input type="date" id="toDate" />
+        </label>
+        <button id="exportExcelBtn" class="btn btn-success">تصدير Excel</button>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>الطابع الزمني</th>
+              <th>التاريخ</th>
+              <th>اسم المندوب</th>
+              <th>المكان</th>
+              <th>اسم العميل</th>
+              <th>بدل السفر</th>
+            </tr>
+          </thead>
+          <tbody id="recordsBody"></tbody>
+        </table>
       </div>
     </section>
 
-    <!-- التطبيق الرئيسي -->
-    <section id="appSection" class="hidden">
-      <nav class="tabs-bar">
-        <button type="button" class="tab-btn active" data-tab="newTripTab">تسجيل رحلة</button>
-        <button type="button" class="tab-btn" data-tab="recordsTab">سجل الرحلات</button>
-        <button type="button" class="tab-btn" data-tab="analysisTab">تحليل العملاء</button>
-        <button type="button" class="tab-btn admin-only" data-tab="adminTab">إدارة المناديب والبدلات</button>
-      </nav>
-
-      <!-- تبويب تسجيل رحلة -->
-      <div id="newTripTab" class="tab-panel active card">
-        <h2>تسجيل رحلة جديدة</h2>
-        <form id="tripForm" class="grid-form">
-          <div class="field">
-            <label for="tripDate">التاريخ</label>
-            <input type="date" id="tripDate" required />
-          </div>
-
-          <div class="field">
-            <label for="tripRepSelect">اسم المندوب</label>
-            <select id="tripRepSelect" required></select>
-          </div>
-
-          <div class="field">
-            <label for="tripPlace">المكان / المنطقة</label>
-            <input type="text" id="tripPlace" placeholder="مثال: طنطا - العجيزي" required />
-          </div>
-
-          <div class="field">
-            <label for="tripClient">اسم العميل</label>
-            <input type="text" id="tripClient" placeholder="اسم العميل أو المخزن" required />
-          </div>
-
-          <div class="field">
-            <label for="tripAllowance">بدل السفر (جنيه)</label>
-            <input type="number" step="0.01" id="tripAllowance" required />
-          </div>
-
-          <div class="field full-width">
-            <button type="submit" class="btn btn-primary">حفظ الرحلة</button>
-          </div>
-        </form>
+    <!-- تبويب تحاليل العملاء (يعمل أونلاين وأوفلاين) -->
+    <section id="analysisTab" class="card tab-panel">
+      <h2>تحاليل العملاء (يعمل بدون إنترنت)</h2>
+      <div class="form-grid">
+        <label>
+          اسم العميل
+          <input type="text" id="anClient" placeholder="اسم العميل" />
+        </label>
+        <label>
+          الأحماض
+          <input type="number" step="0.01" id="anAcid" value="0" />
+        </label>
+        <label>
+          الوزن فارغ
+          <input type="number" step="0.01" id="anEmpty" value="0" />
+        </label>
+        <label>
+          الوزن مليان قبل الغليان
+          <input type="number" step="0.01" id="anBeforeBoil" value="0" />
+        </label>
+        <label>
+          الوزن بعد الغليان
+          <input type="number" step="0.01" id="anAfterBoil" value="0" />
+        </label>
+        <label>
+          وزن الرواسب
+          <input type="number" step="0.01" id="anSediment" value="0" />
+        </label>
       </div>
 
-      <!-- تبويب سجل الرحلات -->
-      <div id="recordsTab" class="tab-panel card">
-        <div class="section-header">
-          <h2>سجل الرحلات وبدل السفر</h2>
-          <button id="exportExcelBtn" type="button" class="btn btn-success">تصدير Excel (.xls)</button>
-        </div>
+      <!-- صف النتائج: الأحماض - المياه - الرواسب -->
+      <div class="results-grid">
+        <div class="result-box"><span>نسبة الأحماض</span><strong id="resAcid">0.00%</strong></div>
+        <div class="result-box"><span>نسبة المياه</span><strong id="resWater">0.00%</strong></div>
+        <div class="result-box"><span>نسبة الرواسب</span><strong id="resSediment">0.00%</strong></div>
+      </div>
 
-        <div class="filters-row">
-          <div class="field">
-            <label for="fromDate">من تاريخ</label>
-            <input type="date" id="fromDate" />
-          </div>
-          <div class="field">
-            <label for="toDate">إلى تاريخ</label>
-            <input type="date" id="toDate" />
-          </div>
-        </div>
-
-        <p id="recordsSummary" class="summary-text"></p>
-
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>الطابع الزمني</th>
-                <th>التاريخ</th>
-                <th>المندوب</th>
-                <th>المكان</th>
-                <th>العميل</th>
-                <th>البدل (جنيه)</th>
-              </tr>
-            </thead>
-            <tbody id="recordsBody"></tbody>
-          </table>
+      <!-- الخصم بالطن في منتصف الصفحة تحت نتائج المياه والرواسب والأحماض -->
+      <div class="center-deduction-row">
+        <div class="result-box highlight center-deduction-card">
+          <span>الخصم بالطن (كجم/طن)</span>
+          <strong id="resDeductionTon">0</strong>
         </div>
       </div>
 
-      <!-- تبويب تحليل العملاء -->
-      <div id="analysisTab" class="tab-panel card">
-        <h2>تحليل العملاء والرحلات</h2>
-        <p class="hint">ملخص فوري مبني على الرحلات المسجلة محلياً على هذا الجهاز.</p>
-        <div id="analysisStatsGrid" class="stats-grid"></div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>اسم العميل</th>
-                <th>عدد الزيارات</th>
-                <th>إجمالي البدلات (جنيه)</th>
-                <th>آخر زيارة</th>
-                <th>الأماكن</th>
-              </tr>
-            </thead>
-            <tbody id="clientsAnalysisBody"></tbody>
-          </table>
-        </div>
+      <div class="actions-row">
+        <button id="saveAnalysisBtn" class="btn btn-primary">حفظ التحليل محلياً</button>
       </div>
 
-      <!-- تبويب إدارة المناديب والبدلات (للمشرف فقط) -->
-      <div id="adminTab" class="tab-panel card admin-only">
-        <h2>إدارة المناديب وقيمة البدل الافتراضية</h2>
+      <h3>التحاليل المحفوظة على الجهاز</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>العميل</th>
+              <th>أحماض %</th>
+              <th>مياه %</th>
+              <th>رواسب %</th>
+              <th>خصم/طن</th>
+            </tr>
+          </thead>
+          <tbody id="analysisBody"></tbody>
+        </table>
+      </div>
+    </section>
 
-        <div class="admin-block">
-          <h3>قيمة بدل السفر الافتراضية</h3>
-          <div class="inline-form">
-            <input type="number" step="0.01" id="defaultAllowanceInput" />
-            <button id="saveAllowanceBtn" type="button" class="btn btn-primary">حفظ البدل</button>
-          </div>
-        </div>
+    <!-- تبويب المناديب (للمشرف فقط) -->
+    <section id="repsTab" class="card tab-panel admin-only hidden">
+      <h2>إدارة المناديب (للمشرف فقط)</h2>
+      <form id="addRepForm" class="inline-form">
+        <input type="text" id="newRepName" placeholder="اسم المندوب الجديد" required />
+        <input type="tel" id="newRepPhone" placeholder="رقم التليفون (مثال: 010xxxxxxxx)" required />
+        <button type="submit" class="btn btn-primary">إضافة مندوب</button>
+      </form>
+      <ul id="repsList" class="reps-list"></ul>
+    </section>
 
-        <div class="admin-block">
-          <h3>إضافة مندوب جديد</h3>
-          <form id="addRepForm" class="inline-form">
-            <input type="text" id="newRepName" placeholder="اسم المندوب" required />
-            <input type="tel" id="newRepPhone" placeholder="رقم التليفون" required />
-            <button type="submit" class="btn btn-primary">إضافة</button>
-          </form>
-        </div>
-
-        <div class="admin-block">
-          <h3>قائمة المناديب المسجلين</h3>
-          <ul id="repsList" class="reps-list"></ul>
-        </div>
+    <!-- تبويب بدل السفر (للمشرف فقط) -->
+    <section id="allowanceTab" class="card tab-panel admin-only hidden">
+      <h2>إعدادات بدل السفر (للمشرف فقط)</h2>
+      <div class="inline-form">
+        <label>
+          قيمة بدل السفر الافتراضية لكل رحلة (جنيه)
+          <input type="number" step="0.01" id="defaultAllowanceInput" />
+        </label>
+        <button id="saveAllowanceBtn" class="btn btn-primary">حفظ البدل</button>
       </div>
     </section>
   </main>
 
-  <script src="app.js"></script>
+  <footer class="app-footer">
+    تصميم وهيكلة علي رجب - 01276341407
+  </footer>
+
   <script src="analysis.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
