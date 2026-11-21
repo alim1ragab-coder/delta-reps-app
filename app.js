@@ -7,8 +7,7 @@ const KEYS = {
 
 // ضع رقم تليفونك (ورقم أي مشرف آخر) هنا بالأرقام فقط
 const ADMIN_PHONES = [
-  "01276341407",
-  "01144803016"
+  "01276341407"
 ];
 
 const DEFAULT_REPS = [
@@ -208,6 +207,23 @@ function applyRoleUI(user) {
   document.getElementById("logoutBtn").classList.remove("hidden");
   document.getElementById("openChangePassBtn").classList.remove("hidden");
 
+  const backBtn = document.getElementById("backToLoginBtn");
+  if (backBtn) {
+    backBtn.classList.add("hidden");
+  }
+
+  document.querySelectorAll(".tab-btn").forEach((el) => {
+    el.classList.remove("hidden");
+    if (el.classList.contains("admin-only")) {
+      el.classList.toggle("hidden", !isAdmin);
+    }
+  });
+
+  const exportBtn = document.getElementById("exportExcelBtn");
+  if (exportBtn) {
+    exportBtn.classList.toggle("hidden", !isAdmin);
+  }
+
   const avatarEl = document.getElementById("headerAvatar");
   if (user.avatar) {
     avatarEl.src = user.avatar;
@@ -216,12 +232,9 @@ function applyRoleUI(user) {
     avatarEl.classList.add("hidden");
   }
 
+  document.getElementById("userBadge").classList.remove("hidden");
   document.getElementById("userBadge").textContent =
     `${user.name} (${user.phone}) - ${isAdmin ? "مشرف" : "مندوب"}`;
-
-  document.querySelectorAll(".admin-only").forEach((el) => {
-    el.classList.toggle("hidden", !isAdmin);
-  });
 
   if (!isAdmin) {
     const activeTab = document.querySelector(".tab-btn.active");
@@ -235,6 +248,9 @@ function applyRoleUI(user) {
   document.getElementById("defaultAllowanceInput").value = getAllowance();
   renderRepsList();
   renderTripsTable();
+  if (typeof renderSavedLabAnalyses === "function") {
+    renderSavedLabAnalyses();
+  }
 }
 
 function refreshRepSelect(user, isAdmin) {
@@ -275,7 +291,7 @@ function renderRepsList() {
           <div class="hint">${statusText}</div>
         </div>
       </div>
-      <button class="btn btn-danger" data-id="${rep.id}">حذف</button>
+      <button type="button" class="btn btn-danger" data-id="${rep.id}">حذف</button>
     `;
     li.querySelector("button").addEventListener("click", () => {
       const remaining = getAccounts().filter((x) => x.id !== rep.id);
@@ -293,7 +309,14 @@ function getVisibleTripsForUser(user) {
   if (user.role === "admin") {
     return allTrips;
   }
-  return allTrips.filter((t) => normalizePhone(t.ownerPhone) === normalizePhone(user.phone));
+  const userPhone = normalizePhone(user.phone);
+  const userName = (user.name || "").trim();
+
+  return allTrips.filter((t) => {
+    const samePhone = t.ownerPhone && normalizePhone(t.ownerPhone) === userPhone;
+    const sameName = userName && (t.repName || "").trim() === userName;
+    return samePhone || sameName;
+  });
 }
 
 function getFilteredTrips() {
@@ -319,11 +342,11 @@ function renderTripsTable() {
     totalAllowance += parseFloat(t.allowance) || 0;
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${t.timestamp}</td>
-      <td>${t.date}</td>
-      <td>${t.repName}</td>
-      <td>${t.place}</td>
-      <td>${t.client}</td>
+      <td>${escapeHtml(t.timestamp)}</td>
+      <td>${escapeHtml(t.date)}</td>
+      <td>${escapeHtml(t.repName)}</td>
+      <td>${escapeHtml(t.place)}</td>
+      <td>${escapeHtml(t.client)}</td>
       <td>${(parseFloat(t.allowance) || 0).toFixed(2)}</td>
     `;
     tbody.appendChild(tr);
@@ -381,6 +404,12 @@ function escapeHtml(val) {
 }
 
 function exportTripsToExcel() {
+  const user = getCurrentUser();
+  if (!user || user.role !== "admin") {
+    alert("تصدير ملف Excel متاح للمشرفين فقط.");
+    return;
+  }
+
   const rows = getFilteredTrips();
   const { summaryList, grandDays, grandMoney } = buildRepSummaryRows(rows);
 
@@ -484,20 +513,28 @@ function switchTab(tabId) {
   document.querySelectorAll(".tab-panel").forEach((p) => {
     p.classList.toggle("active", p.id === tabId);
   });
+  if (tabId === "analysisTab" && typeof renderSavedLabAnalyses === "function") {
+    renderSavedLabAnalyses();
+  }
+}
+
+function hideSplashImmediately() {
+  const splash = document.getElementById("splashScreen");
+  if (!splash) return;
+  splash.style.transition = "opacity 0.25s ease";
+  splash.style.opacity = "0";
+  splash.style.pointerEvents = "none";
+  setTimeout(() => {
+    splash.style.display = "none";
+  }, 260);
 }
 
 function initSplashScreen() {
-  const splash = document.getElementById("splashScreen");
-  if (!splash) return;
-
-  setTimeout(() => {
-    splash.style.transition = "opacity 0.4s ease";
-    splash.style.opacity = "0";
-    splash.style.pointerEvents = "none";
-    setTimeout(() => {
-      splash.style.display = "none";
-    }, 420);
-  }, 5000);
+  const skipBtn = document.getElementById("skipSplashBtn");
+  if (skipBtn) {
+    skipBtn.addEventListener("click", hideSplashImmediately);
+  }
+  setTimeout(hideSplashImmediately, 2000);
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -531,11 +568,26 @@ document.addEventListener("DOMContentLoaded", () => {
     const user = getCurrentUser();
     if (!user) return;
 
+    const oldPhone = normalizePhone(user.phone);
+    const newPhone = normalizePhone(document.getElementById("updatePhoneInput").value);
     const currentPass = document.getElementById("currentPassInput").value;
     const newPass = document.getElementById("updatedPassInput").value;
     const newAvatar = await readImageAsDataUrl(document.getElementById("updateAvatarInput"));
 
     const patch = {};
+
+    if (newPhone && newPhone !== oldPhone) {
+      if (newPhone.length < 10) {
+        alert("من فضلك أدخل رقم تليفون صحيح.");
+        return;
+      }
+      const existingWithPhone = findAccountByPhone(newPhone);
+      if (existingWithPhone && existingWithPhone.id !== user.id) {
+        alert("رقم التليفون الجديد مسجل بالفعل لحساب آخر.");
+        return;
+      }
+      patch.phone = newPhone;
+    }
 
     if (newPass) {
       if (currentPass !== user.password) {
@@ -553,12 +605,22 @@ document.addEventListener("DOMContentLoaded", () => {
       patch.avatar = newAvatar;
     }
 
-    if (!patch.password && !patch.avatar) {
-      alert("أدخل كلمة سر جديدة أو اختر صورة لتحديثها.");
+    if (!patch.phone && !patch.password && !patch.avatar) {
+      alert("أدخل رقم تليفون جديد، أو كلمة سر جديدة، أو اختر صورة لتحديثها.");
       return;
     }
 
     const updated = updateAccount(user.id, patch);
+
+    if (patch.phone) {
+      localStorage.setItem(KEYS.session, patch.phone);
+      const updatedTrips = getTrips().map((t) =>
+        normalizePhone(t.ownerPhone) === oldPhone ? { ...t, ownerPhone: patch.phone } : t
+      );
+      setTrips(updatedTrips);
+    }
+
+    document.getElementById("updatePhoneInput").value = "";
     document.getElementById("currentPassInput").value = "";
     document.getElementById("updatedPassInput").value = "";
     document.getElementById("updateAvatarInput").value = "";
@@ -573,8 +635,21 @@ document.addEventListener("DOMContentLoaded", () => {
       b.classList.toggle("hidden", b.dataset.tab !== "analysisTab");
     });
     switchTab("analysisTab");
+    document.getElementById("userBadge").classList.remove("hidden");
     document.getElementById("userBadge").textContent = "وضع التحاليل (بدون نت)";
+    const backBtn = document.getElementById("backToLoginBtn");
+    if (backBtn) backBtn.classList.remove("hidden");
   });
+
+  const backToLoginBtn = document.getElementById("backToLoginBtn");
+  if (backToLoginBtn) {
+    backToLoginBtn.addEventListener("click", () => {
+      document.getElementById("appSection").classList.add("hidden");
+      document.getElementById("userBadge").classList.add("hidden");
+      backToLoginBtn.classList.add("hidden");
+      document.getElementById("authSection").classList.remove("hidden");
+    });
+  }
 
   document.getElementById("logoutBtn").addEventListener("click", () => {
     localStorage.removeItem(KEYS.session);
