@@ -4,16 +4,17 @@
 
 body {
   margin: 0;
-  font-family: "Segoe UI", Tahoma, Arial, sans-serif;
-  background: #f4f6f9;
-  color: #1f2937;
-  line-height: 1.6;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  background: #f1f5f9;
+  color: #0f172a;
+  line-height: 1.5;
 }
 
 .hidden {
   display: none !important;
 }
 
+/* شاشة البداية Splash Screen */
 .splash-screen {
   position: fixed;
   inset: 0;
@@ -24,28 +25,28 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 16px;
+  gap: 14px;
   padding: 20px;
   text-align: center;
 }
 
 .splash-img {
-  max-width: 340px;
-  width: 100%;
+  max-width: min(520px, 92vw);
+  max-height: 60vh;
+  object-fit: contain;
   border-radius: 14px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
 }
 
 .splash-caption {
   font-size: 16px;
-  font-weight: bold;
-  letter-spacing: 0.4px;
+  font-weight: 700;
 }
 
-.app-header {
-  background: #1e293b;
+/* الهيدر العلوي */
+.app-header.topbar {
+  background: #0f172a;
   color: #ffffff;
-  padding: 14px 20px;
+  padding: 12px 18px;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -62,9 +63,10 @@ body {
 .brand-logo {
   width: 48px;
   height: 48px;
+  object-fit: contain;
   border-radius: 10px;
-  object-fit: cover;
   background: #ffffff;
+  padding: 3px;
 }
 
 .app-header h1 {
@@ -80,8 +82,8 @@ body {
 
 .header-actions {
   display: flex;
-  align-items: center;
   flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
 }
 
@@ -94,24 +96,27 @@ body {
 }
 
 .user-badge {
-  background: rgba(255, 255, 255, 0.12);
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-size: 13px;
+  background: #1e293b;
+  color: #f8fafc;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
 }
 
+/* الحاوية والكروت */
 .container {
-  max-width: 1050px;
-  margin: 24px auto;
-  padding: 0 16px;
+  max-width: 980px;
+  margin: 16px auto;
+  padding: 0 12px;
 }
 
 .card {
   background: #ffffff;
-  border-radius: 12px;
-  padding: 20px;
-  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.06);
-  margin-bottom: 18px;
+  border-radius: 14px;
+  padding: 16px;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06);
+  margin-bottom: 14px;
 }
 
 .auth-card {
@@ -120,55 +125,60 @@ body {
 }
 
 h2 {
-  margin-top: 0;
-  font-size: 20px;
+  margin: 0 0 12px;
+  font-size: 18px;
   color: #0f172a;
 }
 
 h3 {
-  margin-top: 18px;
-  font-size: 16px;
+  margin: 14px 0 8px;
+  font-size: 15px;
   color: #1e293b;
 }
 
 .hint {
-  color: #64748b;
   font-size: 13px;
-  margin-top: 0;
+  color: #475569;
+  margin: 4px 0 12px;
 }
 
+/* الحقول والنماذج */
 .field {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-bottom: 14px;
+  gap: 4px;
+  min-width: 0;
 }
 
 .field label {
-  font-size: 13px;
-  font-weight: bold;
-  color: #334155;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #1e293b;
 }
 
 .field input,
 .field select {
-  padding: 10px 12px;
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
   border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  font-size: 14px;
-  font-family: inherit;
+  border-radius: 9px;
+  font-size: 13.5px;
+  background: #ffffff;
+  color: #0f172a;
 }
 
 .field input:focus,
 .field select:focus {
   outline: none;
   border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.14);
 }
 
 .grid-form {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .full-width {
@@ -178,42 +188,50 @@ h3 {
 .inline-form {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
+  align-items: center;
 }
 
 .inline-form input {
-  flex: 1 1 180px;
-  padding: 10px 12px;
+  flex: 1 1 160px;
+  min-width: 0;
+  padding: 8px 10px;
   border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  font-family: inherit;
+  border-radius: 9px;
+  font-size: 13.5px;
 }
 
-.actions-row,
 .filters-row {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
-  align-items: center;
+  margin-bottom: 10px;
 }
 
-.section-header {
+.actions-row {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 12px;
+  gap: 8px;
+  margin-top: 14px;
 }
 
+/* الأزرار */
 .btn {
-  padding: 10px 16px;
   border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: bold;
+  border-radius: 9px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
-  font-family: inherit;
+  transition: opacity 0.15s ease, transform 0.1s ease;
+}
+
+.btn:hover {
+  opacity: 0.93;
+}
+
+.btn:active {
+  transform: scale(0.99);
 }
 
 .btn-primary {
@@ -221,26 +239,9 @@ h3 {
   color: #ffffff;
 }
 
-.btn-primary:hover {
-  background: #1d4ed8;
-}
-
 .btn-success {
   background: #16a34a;
   color: #ffffff;
-}
-
-.btn-success:hover {
-  background: #15803d;
-}
-
-.btn-teal {
-  background: #0f766e;
-  color: #ffffff;
-}
-
-.btn-teal:hover {
-  background: #115e59;
 }
 
 .btn-danger {
@@ -248,8 +249,9 @@ h3 {
   color: #ffffff;
 }
 
-.btn-danger:hover {
-  background: #b91c1c;
+.btn-teal {
+  background: #0d9488;
+  color: #ffffff;
 }
 
 .btn-outline {
@@ -258,22 +260,28 @@ h3 {
   border: 1px solid #94a3b8;
 }
 
+.card .btn-outline {
+  color: #0f172a;
+  border-color: #cbd5e1;
+}
+
+/* التبويبات */
 .tabs-bar {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 
 .tab-btn {
   background: #e2e8f0;
   color: #1e293b;
   border: none;
-  padding: 10px 16px;
-  border-radius: 8px;
-  font-weight: bold;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
-  font-family: inherit;
 }
 
 .tab-btn.active {
@@ -289,121 +297,160 @@ h3 {
   display: block;
 }
 
-.summary-text {
-  font-weight: bold;
-  color: #0f172a;
-  margin: 12px 0;
+.section-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
 }
 
+.summary-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+  margin: 8px 0 10px;
+}
+
+/* الجداول */
 .table-wrap {
+  width: 100%;
   overflow-x: auto;
 }
 
 table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 th,
 td {
-  padding: 10px 12px;
-  border-bottom: 1px solid #e2e8f0;
+  border: 1px solid #e2e8f0;
+  padding: 8px;
   text-align: right;
+  white-space: nowrap;
 }
 
 th {
   background: #f8fafc;
   color: #0f172a;
-  font-weight: bold;
+  font-weight: 700;
 }
 
+/* تبويب التحاليل: كل خانتين جنب بعض ومربعات نسب مدمجة */
 .lab-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-  gap: 12px 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.lab-full-row {
+  grid-column: 1 / -1;
+}
+
+.lab-grid label {
+  font-size: 12px;
+  margin-bottom: 2px;
+}
+
+.lab-grid input {
+  padding: 7px 9px;
+  font-size: 13px;
+  border-radius: 8px;
 }
 
 .lab-results-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
   margin-top: 10px;
 }
 
 .lab-metric-card {
   background: #f8fafc;
   border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  padding: 14px;
+  border-radius: 9px;
+  padding: 7px 6px;
   text-align: center;
+  min-width: 0;
 }
 
 .lab-metric-label {
-  font-size: 13px;
+  font-size: 11px;
   color: #475569;
-  margin-bottom: 4px;
+  font-weight: 600;
+  margin-bottom: 2px;
 }
 
 .lab-metric-value {
-  font-size: 20px;
-  font-weight: bold;
+  font-size: 15px;
+  font-weight: 700;
   color: #0f172a;
 }
 
 .lab-deduction-box {
-  max-width: 260px;
-  margin: 16px auto 0;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
+  margin-top: 8px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
   border-radius: 10px;
-  padding: 12px 16px;
-  text-align: center;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 }
 
 .lab-deduction-label {
-  font-size: 13px;
-  color: #991b1b;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #1e3a8a;
 }
 
 .lab-deduction-value {
-  font-size: 22px;
-  font-weight: bold;
-  color: #b91c1c;
-  margin-top: 2px;
+  font-size: 16px;
+  font-weight: 800;
+  color: #1d4ed8;
 }
 
 .lab-save-row {
+  margin-top: 10px;
   display: flex;
-  justify-content: flex-end;
-  margin-top: 16px;
+  gap: 8px;
 }
 
+/* قائمة المناديب */
 .admin-block {
-  padding-top: 14px;
-  margin-top: 14px;
+  padding-top: 8px;
+  margin-top: 10px;
   border-top: 1px solid #e2e8f0;
 }
 
 .admin-block:first-of-type {
   border-top: none;
-  padding-top: 0;
   margin-top: 0;
+  padding-top: 0;
 }
 
 .reps-list {
   list-style: none;
-  padding: 0;
   margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .reps-list li {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 10px 0;
-  border-bottom: 1px solid #f1f5f9;
+  gap: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 8px 10px;
 }
 
 .rep-row-info {
@@ -413,72 +460,40 @@ th {
 }
 
 .rep-avatar-mini {
-  width: 38px;
-  height: 38px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   object-fit: cover;
 }
 
+/* الفوتر */
 .app-footer {
   text-align: center;
-  padding: 18px 12px;
-  color: #64748b;
-  font-size: 13px;
-}/* تنسيق تحاليل العملاء: كل خانتين جنب بعض على الموبايل والشاشات */
-.lab-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  padding: 16px 12px 24px;
+  font-size: 12.5px;
+  color: #475569;
 }
 
-.lab-full-row {
-  grid-column: 1 / -1;
-}
-
-/* تنسيق كروت النسب (الأحماض / المياه / الرواسب): كل 2 جنب بعض */
-.lab-results-row {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 12px;
-}
-
-/* لو حابب آخر كارت (الرواسب) ياخد عرض صف كامل أو يفضل جنب اللي قبله:
-   سيبه كده هيمشي 2 جنب بعض تلقائياً */
-
-.lab-grid input {
-  width: 100%;
-  min-width: 0;
-  box-sizing: border-box;
-  padding: 8px 10px;
-  font-size: 14px;
-}
-
-.lab-grid label {
-  font-size: 13px;
-  margin-bottom: 4px;
-  display: block;
-}
-
-.lab-metric-card {
-  padding: 10px;
-  min-width: 0;
-  text-align: center;
-}
-
-.lab-metric-value {
-  font-size: 16px;
-  font-weight: bold;
-}
-
-/* على الشاشات الصغيرة جداً لو خانة ضاقت شوية */
-@media (max-width: 360px) {
-  .lab-grid,
-  .lab-results-row {
-    gap: 8px;
+/* تجاوب الشاشات الصغيرة جداً */
+@media (max-width: 480px) {
+  .grid-form {
+    grid-template-columns: 1fr;
   }
-  .lab-grid input {
-    padding: 7px 8px;
-    font-size: 13px;
+
+  .lab-results-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .lab-metric-card {
+    padding: 6px 5px;
+  }
+
+  .lab-metric-label {
+    font-size: 10.5px;
+  }
+
+  .lab-metric-value {
+    font-size: 15px;
   }
 }
