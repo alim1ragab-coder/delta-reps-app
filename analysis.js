@@ -1,76 +1,77 @@
-const ANALYSIS_STORAGE_KEY = "delta_client_analyses_v2";
+function renderClientAnalysis() {
+  const statsGrid = document.getElementById("analysisStatsGrid");
+  const tbody = document.getElementById("clientsAnalysisBody");
+  if (!statsGrid || !tbody) return;
 
-function calculateAnalysisValues() {
-  const acid = parseFloat(document.getElementById("anAcid").value) || 0;
-  const emptyW = parseFloat(document.getElementById("anEmpty").value) || 0;
-  const beforeBoil = parseFloat(document.getElementById("anBeforeBoil").value) || 0;
-  const afterBoil = parseFloat(document.getElementById("anAfterBoil").value) || 0;
-  const sedimentW = parseFloat(document.getElementById("anSediment").value) || 0;
-  const clientWeight = parseFloat(document.getElementById("anClientWeight").value) || 0;
+  const allTrips = typeof getTrips === "function"
+    ? getTrips()
+    : JSON.parse(localStorage.getItem("delta_trips_records_v4") || "[]");
 
-  const netSample = beforeBoil - emptyW;
-  const waterPct = netSample > 0 ? ((beforeBoil - afterBoil) / netSample) * 100 : 0;
-  const sedimentPct = netSample > 0 ? ((sedimentW - emptyW) / netSample) * 100 : 0;
+  const currentUser = typeof getCurrentUser === "function" ? getCurrentUser() : null;
+  const trips = currentUser && currentUser.role !== "admin"
+    ? allTrips.filter((t) => String(t.ownerPhone || "").replace(/\D/g, "") === String(currentUser.phone || "").replace(/\D/g, ""))
+    : allTrips;
 
-  const acidPenalty = acid > 3 ? (acid - 3) * 10 : 0;
-  const waterSedimentSum = waterPct + sedimentPct;
-  const wsPenalty = waterSedimentSum > 2 ? (waterSedimentSum - 2) * 10 : 0;
-  const deductionPerTon = Math.round(acidPenalty + wsPenalty);
-  const deductionQty = (deductionPerTon / 1000) * clientWeight;
+  const clientMap = new Map();
+  let totalAllowance = 0;
 
-  document.getElementById("resAcid").textContent = `${acid.toFixed(2)}%`;
-  document.getElementById("resWater").textContent = `${waterPct.toFixed(2)}%`;
-  document.getElementById("resSediment").textContent = `${sedimentPct.toFixed(2)}%`;
-  document.getElementById("resDeductionTon").textContent = `${deductionPerTon}`;
-  document.getElementById("resDeductionQty").textContent = `${deductionQty.toFixed(2)}`;
+  trips.forEach((t) => {
+    const clientName = (t.client || "عميل غير مسمى").trim();
+    const allowance = parseFloat(t.allowance) || 0;
+    totalAllowance += allowance;
 
-  return {
-    client: document.getElementById("anClient").value.trim() || "غير محدد",
-    acid: acid.toFixed(2),
-    waterPct: waterPct.toFixed(2),
-    sedimentPct: sedimentPct.toFixed(2),
-    deductionPerTon,
-    deductionQty: deductionQty.toFixed(2)
-  };
-}
+    if (!clientMap.has(clientName)) {
+      clientMap.set(clientName, {
+        client: clientName,
+        visits: 0,
+        allowance: 0,
+        lastDate: t.date || "-",
+        places: new Set()
+      });
+    }
 
-function loadSavedAnalyses() {
-  return JSON.parse(localStorage.getItem(ANALYSIS_STORAGE_KEY) || "[]");
-}
+    const entry = clientMap.get(clientName);
+    entry.visits += 1;
+    entry.allowance += allowance;
+    if (t.date && (!entry.lastDate || t.date > entry.lastDate)) {
+      entry.lastDate = t.date;
+    }
+    if (t.place) {
+      entry.places.add(t.place.trim());
+    }
+  });
 
-function renderSavedAnalyses() {
-  const list = loadSavedAnalyses();
-  const tbody = document.getElementById("analysisBody");
+  statsGrid.innerHTML = `
+    <div class="stat-card">
+      <div class="label">إجمالي الرحلات</div>
+      <div class="value">${trips.length}</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">عدد العملاء</div>
+      <div class="value">${clientMap.size}</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">إجمالي البدلات</div>
+      <div class="value">${totalAllowance.toFixed(2)} ج</div>
+    </div>
+  `;
+
   tbody.innerHTML = "";
+  const sortedClients = Array.from(clientMap.values()).sort((a, b) => b.visits - a.visits);
 
-  list.forEach((item) => {
+  sortedClients.forEach((c) => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${item.client}</td>
-      <td>${item.acid}%</td>
-      <td>${item.waterPct}%</td>
-      <td>${item.sedimentPct}%</td>
-      <td>${item.deductionPerTon}</td>
-      <td>${item.deductionQty}</td>
+      <td>${c.client}</td>
+      <td>${c.visits}</td>
+      <td>${c.allowance.toFixed(2)}</td>
+      <td>${c.lastDate}</td>
+      <td>${Array.from(c.places).join("، ") || "-"}</td>
     `;
     tbody.appendChild(tr);
   });
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-  ["anAcid", "anEmpty", "anBeforeBoil", "anAfterBoil", "anSediment", "anClientWeight"].forEach((id) => {
-    document.getElementById(id).addEventListener("input", calculateAnalysisValues);
-  });
-
-  document.getElementById("saveAnalysisBtn").addEventListener("click", () => {
-    const calc = calculateAnalysisValues();
-    const list = loadSavedAnalyses();
-    list.unshift(calc);
-    localStorage.setItem(ANALYSIS_STORAGE_KEY, JSON.stringify(list));
-    renderSavedAnalyses();
-    alert("تم حفظ التحليل محلياً على الجهاز.");
-  });
-
-  calculateAnalysisValues();
-  renderSavedAnalyses();
+  renderClientAnalysis();
 });
