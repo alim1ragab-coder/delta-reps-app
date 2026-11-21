@@ -7,7 +7,7 @@ const KEYS = {
 
 // ضع رقم تليفونك (ورقم أي مشرف آخر) هنا بالأرقام فقط
 const ADMIN_PHONES = [
-  "01000000000"
+  "01276341407"
 ];
 
 const DEFAULT_REPS = [
