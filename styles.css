@@ -424,4 +424,61 @@ th {
   padding: 18px 12px;
   color: #64748b;
   font-size: 13px;
+}/* تنسيق تحاليل العملاء: كل خانتين جنب بعض على الموبايل والشاشات */
+.lab-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.lab-full-row {
+  grid-column: 1 / -1;
+}
+
+/* تنسيق كروت النسب (الأحماض / المياه / الرواسب): كل 2 جنب بعض */
+.lab-results-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+/* لو حابب آخر كارت (الرواسب) ياخد عرض صف كامل أو يفضل جنب اللي قبله:
+   سيبه كده هيمشي 2 جنب بعض تلقائياً */
+
+.lab-grid input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  font-size: 14px;
+}
+
+.lab-grid label {
+  font-size: 13px;
+  margin-bottom: 4px;
+  display: block;
+}
+
+.lab-metric-card {
+  padding: 10px;
+  min-width: 0;
+  text-align: center;
+}
+
+.lab-metric-value {
+  font-size: 16px;
+  font-weight: bold;
+}
+
+/* على الشاشات الصغيرة جداً لو خانة ضاقت شوية */
+@media (max-width: 360px) {
+  .lab-grid,
+  .lab-results-row {
+    gap: 8px;
+  }
+  .lab-grid input {
+    padding: 7px 8px;
+    font-size: 13px;
+  }
 }
