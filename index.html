@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#1e293b" />
+  <meta name="theme-color" content="#132a2e" />
   <title>مناديب الدلتا TAGADDOD - BY.ALI RAGAB</title>
   <link rel="manifest" href="manifest.json" />
-  <link rel="stylesheet" href="styles.css?v=20261122-xlsx" />
+  <link rel="stylesheet" href="styles.css?v=20261122-v2" />
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 </head>
 <body>
@@ -26,6 +26,7 @@
     </div>
 
     <div class="header-actions">
+      <span id="connectionStatusBadge" class="status-badge status-online">متصل بالشبكة</span>
       <img id="headerAvatar" src="" alt="صورة المستخدم" class="header-avatar hidden" />
       <span id="userBadge" class="user-badge hidden"></span>
       <button id="backToLoginBtn" type="button" class="btn btn-outline hidden">رجوع لتسجيل الدخول</button>
@@ -47,17 +48,26 @@
 
       <div id="existingPassBox" class="field hidden">
         <label for="loginPasswordInput">كلمة السر</label>
-        <input type="password" id="loginPasswordInput" placeholder="أدخل كلمة السر" />
+        <div class="password-wrap">
+          <input type="password" id="loginPasswordInput" placeholder="أدخل كلمة السر" />
+          <button type="button" class="password-toggle-btn" data-target="loginPasswordInput">إظهار</button>
+        </div>
       </div>
 
       <div id="newPassBox" class="field hidden">
         <label for="createPasswordInput">تعيين كلمة سر جديدة (4 خانات فأكثر)</label>
-        <input type="password" id="createPasswordInput" placeholder="اختر كلمة سر" />
+        <div class="password-wrap">
+          <input type="password" id="createPasswordInput" placeholder="اختر كلمة سر" />
+          <button type="button" class="password-toggle-btn" data-target="createPasswordInput">إظهار</button>
+        </div>
       </div>
 
       <div id="confirmPassBox" class="field hidden">
         <label for="confirmPasswordInput">تأكيد كلمة السر</label>
-        <input type="password" id="confirmPasswordInput" placeholder="أعد كتابة كلمة السر" />
+        <div class="password-wrap">
+          <input type="password" id="confirmPasswordInput" placeholder="أعد كتابة كلمة السر" />
+          <button type="button" class="password-toggle-btn" data-target="confirmPasswordInput">إظهار</button>
+        </div>
       </div>
 
       <div id="avatarSetupBox" class="field hidden">
@@ -83,12 +93,18 @@
 
       <div class="field">
         <label for="currentPassInput">كلمة السر الحالية (مطلوبة عند تغيير كلمة السر)</label>
-        <input type="password" id="currentPassInput" placeholder="أدخل كلمة السر الحالية" />
+        <div class="password-wrap">
+          <input type="password" id="currentPassInput" placeholder="أدخل كلمة السر الحالية" />
+          <button type="button" class="password-toggle-btn" data-target="currentPassInput">إظهار</button>
+        </div>
       </div>
 
       <div class="field">
         <label for="updatedPassInput">كلمة سر جديدة (اختياري - 4 خانات فأكثر)</label>
-        <input type="password" id="updatedPassInput" placeholder="أدخل كلمة السر الجديدة" />
+        <div class="password-wrap">
+          <input type="password" id="updatedPassInput" placeholder="أدخل كلمة السر الجديدة" />
+          <button type="button" class="password-toggle-btn" data-target="updatedPassInput">إظهار</button>
+        </div>
       </div>
 
       <div class="field">
@@ -162,6 +178,11 @@
             <label for="toDate">إلى تاريخ</label>
             <input type="date" id="toDate" />
           </div>
+        </div>
+
+        <div class="field full-width" style="margin-bottom: 10px;">
+          <label for="tripSearchInput">بحث سريع (باسم المندوب أو العميل أو المكان)</label>
+          <input type="search" id="tripSearchInput" placeholder="اكتب اسم مندوب أو عميل أو منطقة..." />
         </div>
 
         <p id="recordsSummary" class="summary-text"></p>
@@ -243,6 +264,7 @@
 
         <div class="lab-save-row">
           <button id="saveLabAnalysisBtn" type="button" class="btn btn-teal">حفظ التحليل محلياً</button>
+          <button id="shareLabImageBtn" type="button" class="btn btn-primary">مشاركة صورة</button>
         </div>
 
         <h3>التحاليل المحفوظة على الجهاز</h3>

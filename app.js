@@ -5,9 +5,9 @@ const KEYS = {
   allowance: "delta_default_allowance_v4"
 };
 
-const SHEET_SYNC_URL = "https://script.google.com/macros/s/AKfycbws30RGljgQNG-RajyhwM4SfTX0VtOLv38MQEsw8iSGrl1EVHrplrfyxfYvI0Ed2c9A/exec";
+const SHEET_SYNC_URL = "https://script.google.com/macros/s/AKfycbzS2D9ENbdxUVwDoe-FkdtLl2paeSSxn3Lhm3M2hVz0J1fPnjm6-NiQgdOYUXBZRJ7u/exec";
 
-// ضع رقم تليفونك (ورقم أي مشرف آخر) هنا بالأرقام فقط
+// ضع رقم تليفونك (ورقم أي مشرف أساسي آخر) هنا بالأرقام فقط
 const ADMIN_PHONES = [
   "01276341407"
 ];
@@ -19,12 +19,52 @@ const DEFAULT_REPS = [
 ];
 
 function normalizePhone(phone) {
-  return (phone || "").replace(/\D/g, "").trim();
+  return (phone || "").toString().replace(/\D/g, "").trim();
+}
+
+function isConfiguredAdminPhone(phone) {
+  const clean = normalizePhone(phone);
+  return ADMIN_PHONES.map(normalizePhone).includes(clean);
+}
+
+function isAccountAdmin(account) {
+  if (!account) return false;
+  return account.role === "admin" || isConfiguredAdminPhone(account.phone);
+}
+
+function updateConnectionStatusBadge() {
+  const badge = document.getElementById("connectionStatusBadge");
+  if (!badge) return;
+  const online = navigator.onLine;
+  badge.textContent = online ? "متصل بالشبكة" : "النت فاصل";
+  badge.classList.toggle("status-online", online);
+  badge.classList.toggle("status-offline", !online);
+}
+
+function initPasswordToggles() {
+  document.querySelectorAll(".password-toggle-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const targetId = btn.dataset.target;
+      const input = document.getElementById(targetId);
+      if (!input) return;
+      const isHidden = input.type === "password";
+      input.type = isHidden ? "text" : "password";
+      btn.textContent = isHidden ? "إخفاء" : "إظهار";
+    });
+  });
 }
 
 function getAccounts() {
   const saved = JSON.parse(localStorage.getItem(KEYS.accounts) || "null");
-  if (Array.isArray(saved) && saved.length > 0) return saved;
+  if (Array.isArray(saved) && saved.length > 0) {
+    return saved.map((acc) => ({
+      ...acc,
+      phone: normalizePhone(acc.phone),
+      role: isConfiguredAdminPhone(acc.phone) ? "admin" : (acc.role === "admin" ? "admin" : "rep"),
+      password: String(acc.password ?? ""),
+      avatar: acc.avatar || ""
+    }));
+  }
 
   const initialAdmins = ADMIN_PHONES.map((p, idx) => ({
     id: `admin_${idx + 1}`,
@@ -41,7 +81,14 @@ function getAccounts() {
 }
 
 function setAccounts(list) {
-  localStorage.setItem(KEYS.accounts, JSON.stringify(list));
+  const normalized = (Array.isArray(list) ? list : []).map((acc) => ({
+    ...acc,
+    phone: normalizePhone(acc.phone),
+    role: isConfiguredAdminPhone(acc.phone) ? "admin" : (acc.role === "admin" ? "admin" : "rep"),
+    password: String(acc.password ?? ""),
+    avatar: acc.avatar || ""
+  }));
+  localStorage.setItem(KEYS.accounts, JSON.stringify(normalized));
 }
 
 function findAccountByPhone(phone) {
@@ -51,7 +98,7 @@ function findAccountByPhone(phone) {
 
 function ensureAdminOrApprovedAccount(phone) {
   const clean = normalizePhone(phone);
-  const isAdminPhone = ADMIN_PHONES.map(normalizePhone).includes(clean);
+  const isAdminPhone = isConfiguredAdminPhone(clean);
   let account = findAccountByPhone(clean);
 
   if (!account && isAdminPhone) {
@@ -74,9 +121,17 @@ function ensureAdminOrApprovedAccount(phone) {
 }
 
 function updateAccount(accountId, patch) {
-  const updated = getAccounts().map((acc) =>
-    acc.id === accountId ? { ...acc, ...patch } : acc
-  );
+  const updated = getAccounts().map((acc) => {
+    if (acc.id !== accountId) return acc;
+    const merged = { ...acc, ...patch };
+    const cleanPhone = normalizePhone(merged.phone);
+    return {
+      ...merged,
+      phone: cleanPhone,
+      role: isConfiguredAdminPhone(cleanPhone) ? "admin" : (merged.role === "admin" ? "admin" : "rep"),
+      password: merged.password !== undefined ? String(merged.password ?? "") : String(acc.password ?? "")
+    };
+  });
   setAccounts(updated);
   return updated.find((acc) => acc.id === accountId) || null;
 }
@@ -118,15 +173,25 @@ function setTrips(list) {
   localStorage.setItem(KEYS.trips, JSON.stringify(list));
 }
 
-// --- دوال المزامنة مع Google Sheets في الخلفية ---
+// --- دوال المزامنة مع Google Sheets (صفوف وأعمدة) ---
 function mergeTripsData(localTrips, remoteTrips) {
   const map = new Map();
   (Array.isArray(remoteTrips) ? remoteTrips : []).forEach((t) => {
-    if (t && t.id) map.set(String(t.id), t);
+    if (t && t.id) {
+      map.set(String(t.id), {
+        ...t,
+        ownerPhone: normalizePhone(t.ownerPhone),
+        allowance: parseFloat(t.allowance) || 0
+      });
+    }
   });
   (Array.isArray(localTrips) ? localTrips : []).forEach((t) => {
     if (t && t.id && !map.has(String(t.id))) {
-      map.set(String(t.id), t);
+      map.set(String(t.id), {
+        ...t,
+        ownerPhone: normalizePhone(t.ownerPhone),
+        allowance: parseFloat(t.allowance) || 0
+      });
     }
   });
   return Array.from(map.values()).sort((a, b) => {
@@ -145,34 +210,57 @@ function mergeAccountsData(localAccounts, remoteAccounts) {
   localList.forEach((acc) => {
     map.set(normalizePhone(acc.phone) || String(acc.id), acc);
   });
+
   remoteList.forEach((acc) => {
-    const key = normalizePhone(acc.phone) || String(acc.id);
+    const cleanPhone = normalizePhone(acc.phone);
+    const key = cleanPhone || String(acc.id);
     const prev = map.get(key);
+    const resolvedRole = isConfiguredAdminPhone(cleanPhone)
+      ? "admin"
+      : (acc && acc.role === "admin") || (prev && prev.role === "admin")
+        ? "admin"
+        : "rep";
+
+    const remotePass = acc && acc.password !== undefined && acc.password !== null ? String(acc.password) : "";
+    const localPass = prev && prev.password !== undefined && prev.password !== null ? String(prev.password) : "";
+
     map.set(key, {
       ...(prev || {}),
       ...acc,
-      password: (acc && acc.password) || (prev && prev.password) || "",
+      phone: cleanPhone || (prev && prev.phone) || "",
+      role: resolvedRole,
+      password: remotePass || localPass || "",
       avatar: (acc && acc.avatar) || (prev && prev.avatar) || ""
     });
   });
+
   return Array.from(map.values());
 }
 
 function pushToSheetBackground() {
   if (!SHEET_SYNC_URL || !navigator.onLine) return;
   try {
+    const payload = {
+      action: "sync_all",
+      data: {
+        trips: getTrips(),
+        accounts: getAccounts().map((acc) => ({
+          id: acc.id,
+          name: acc.name,
+          phone: normalizePhone(acc.phone),
+          role: isAccountAdmin(acc) ? "admin" : "rep",
+          password: String(acc.password ?? ""),
+          avatar: acc.avatar || ""
+        })),
+        allowance: getAllowance()
+      }
+    };
+
     fetch(SHEET_SYNC_URL, {
       method: "POST",
       mode: "no-cors",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({
-        action: "sync_all",
-        data: {
-          trips: getTrips(),
-          accounts: getAccounts(),
-          allowance: getAllowance()
-        }
-      })
+      body: JSON.stringify(payload)
     }).catch(() => {});
   } catch (_) {}
 }
@@ -193,7 +281,8 @@ async function pullFromSheetBackground() {
 
     const user = getCurrentUser();
     if (user) {
-      refreshRepSelect(user, user.role === "admin");
+      const adminFlag = isAccountAdmin(user);
+      refreshRepSelect(user, adminFlag);
       document.getElementById("tripAllowance").value = getAllowance().toFixed(2);
       document.getElementById("defaultAllowanceInput").value = getAllowance();
       renderRepsList();
@@ -293,7 +382,7 @@ async function handlePhoneAuthSubmit() {
 }
 
 function applyRoleUI(user) {
-  const isAdmin = user.role === "admin";
+  const isAdmin = isAccountAdmin(user);
   document.getElementById("authSection").classList.add("hidden");
   document.getElementById("profileModalSection").classList.add("hidden");
   document.getElementById("appSection").classList.remove("hidden");
@@ -348,7 +437,9 @@ function applyRoleUI(user) {
 
 function refreshRepSelect(user, isAdmin) {
   const select = document.getElementById("tripRepSelect");
-  const reps = getAccounts().filter((a) => a.role === "rep");
+  const allAccounts = getAccounts();
+  const repsOnly = allAccounts.filter((a) => !isAccountAdmin(a));
+  const selectableList = isAdmin ? allAccounts : repsOnly;
   select.innerHTML = "";
 
   if (!isAdmin) {
@@ -359,48 +450,79 @@ function refreshRepSelect(user, isAdmin) {
     select.disabled = true;
   } else {
     select.disabled = false;
-    reps.forEach((r) => {
+    selectableList.forEach((r) => {
       const opt = document.createElement("option");
       opt.value = r.name;
-      opt.textContent = r.name;
+      opt.textContent = isAccountAdmin(r) ? `${r.name} (مشرف)` : r.name;
       select.appendChild(opt);
     });
   }
 }
 
+function ensureRoleSelectInAddRepForm() {
+  const form = document.getElementById("addRepForm");
+  if (!form || document.getElementById("newRepRole")) return;
+
+  const select = document.createElement("select");
+  select.id = "newRepRole";
+  select.innerHTML = `
+    <option value="rep">مندوب</option>
+    <option value="admin">مشرف</option>
+  `;
+
+  const submitBtn = form.querySelector("button[type='submit']");
+  if (submitBtn) {
+    form.insertBefore(select, submitBtn);
+  } else {
+    form.appendChild(select);
+  }
+}
+
 function renderRepsList() {
   const ul = document.getElementById("repsList");
-  const reps = getAccounts().filter((a) => a.role === "rep");
+  const currentUser = getCurrentUser();
+  const currentPhone = currentUser ? normalizePhone(currentUser.phone) : "";
+  const members = getAccounts();
   ul.innerHTML = "";
 
-  reps.forEach((rep) => {
-    const statusText = rep.password ? "تم تعيين كلمة السر" : "بانتظار الدخول لأول مرة";
+  members.forEach((member) => {
+    const memberIsAdmin = isAccountAdmin(member);
+    const roleLabel = memberIsAdmin ? "مشرف" : "مندوب";
+    const statusText = member.password ? "تم تعيين كلمة السر" : "بانتظار الدخول لأول مرة";
+    const isSelf = normalizePhone(member.phone) === currentPhone;
+
     const li = document.createElement("li");
     li.innerHTML = `
       <div class="rep-row-info">
-        ${rep.avatar ? `<img src="${rep.avatar}" class="rep-avatar-mini" alt="${rep.name}" />` : ""}
+        ${member.avatar ? `<img src="${member.avatar}" class="rep-avatar-mini" alt="${member.name}" />` : ""}
         <div>
-          <strong>${rep.name}</strong> - <span>${rep.phone}</span>
+          <strong>${escapeHtml(member.name)}</strong> - <span>${escapeHtml(member.phone)}</span> <span>(${roleLabel})</span>
           <div class="hint">${statusText}</div>
         </div>
       </div>
-      <button type="button" class="btn btn-danger" data-id="${rep.id}">حذف</button>
+      <button type="button" class="btn btn-danger" data-id="${member.id}" ${isSelf ? "disabled" : ""}>${isSelf ? "حسابك" : "حذف"}</button>
     `;
-    li.querySelector("button").addEventListener("click", () => {
-      const remaining = getAccounts().filter((x) => x.id !== rep.id);
-      setAccounts(remaining);
-      const user = getCurrentUser();
-      if (user) refreshRepSelect(user, user.role === "admin");
-      renderRepsList();
-      pushToSheetBackground();
-    });
+    const delBtn = li.querySelector("button");
+    if (!isSelf) {
+      delBtn.addEventListener("click", () => {
+        const confirmed = confirm(`هل أنت متأكد من حذف الحساب الخاص بـ "${member.name}" (${member.phone})؟`);
+        if (!confirmed) return;
+
+        const remaining = getAccounts().filter((x) => x.id !== member.id);
+        setAccounts(remaining);
+        const user = getCurrentUser();
+        if (user) refreshRepSelect(user, isAccountAdmin(user));
+        renderRepsList();
+        pushToSheetBackground();
+      });
+    }
     ul.appendChild(li);
   });
 }
 
 function getVisibleTripsForUser(user) {
   const allTrips = getTrips();
-  if (user.role === "admin") {
+  if (isAccountAdmin(user)) {
     return allTrips;
   }
   const userPhone = normalizePhone(user.phone);
@@ -418,10 +540,15 @@ function getFilteredTrips() {
   if (!user) return [];
   const from = document.getElementById("fromDate").value;
   const to = document.getElementById("toDate").value;
+  const searchQuery = (document.getElementById("tripSearchInput")?.value || "").trim().toLowerCase();
 
   return getVisibleTripsForUser(user).filter((t) => {
     if (from && t.date < from) return false;
     if (to && t.date > to) return false;
+    if (searchQuery) {
+      const hay = `${t.repName || ""} ${t.client || ""} ${t.place || ""}`.toLowerCase();
+      if (!hay.includes(searchQuery)) return false;
+    }
     return true;
   });
 }
@@ -474,7 +601,7 @@ function cellStyle(bgHex, textHex = "0F172A", bold = false, align = "center") {
 
 function exportTripsToExcel() {
   const user = getCurrentUser();
-  if (!user || user.role !== "admin") {
+  if (!user || !isAccountAdmin(user)) {
     alert("تصدير ملف Excel متاح للمشرفين فقط.");
     return;
   }
@@ -488,7 +615,7 @@ function exportTripsToExcel() {
 
   const repNamesSet = new Set(
     getAccounts()
-      .filter((a) => a.role === "rep")
+      .filter((a) => !isAccountAdmin(a))
       .map((a) => a.name)
   );
   rows.forEach((r) => {
@@ -499,14 +626,12 @@ function exportTripsToExcel() {
   const ws = {};
   ws["!views"] = [{ RTL: true }];
 
-  // عناوين الجدول الرئيسي (الصف 1: A إلى F)
   const headers = ["طابع زمني", "التاريخ", "اسم المندوب", "المكان", "اسم العميل", "بدل السفر"];
   headers.forEach((h, colIdx) => {
     const ref = XLSX.utils.encode_cell({ r: 0, c: colIdx });
     ws[ref] = { t: "s", v: h, s: cellStyle("1E293B", "FFFFFF", true, "center") };
   });
 
-  // بيانات الرحلات (من الصف 2)
   rows.forEach((r, idx) => {
     const excelRowNum = idx + 2;
     const allowanceNum = Number(parseFloat(r.allowance) || 0);
@@ -529,12 +654,10 @@ function exportTripsToExcel() {
   const summaryHeaderRow = Math.max(rows.length + 5, 14);
   const summaryStartRow = summaryHeaderRow + 1;
 
-  // رأس جدول الملخص السفلي (أعمدة G و H و I)
   ws[`G${summaryHeaderRow}`] = { t: "s", v: "المندوب", s: cellStyle("0F172A", "FFFFFF", true, "right") };
   ws[`H${summaryHeaderRow}`] = { t: "s", v: "عدد الأيام", s: cellStyle("0F172A", "FFFFFF", true, "center") };
   ws[`I${summaryHeaderRow}`] = { t: "s", v: "إجمالي البدل", s: cellStyle("0F172A", "FFFFFF", true, "center") };
 
-  // صفوف كل مندوب بمعادلات COUNTIF و SUMIF وألوان متناسقة
   repNames.forEach((repName, i) => {
     const rowNum = summaryStartRow + i;
     ws[`G${rowNum}`] = {
@@ -559,7 +682,6 @@ function exportTripsToExcel() {
   const summaryEndRow = summaryStartRow + Math.max(repNames.length - 1, 0);
   const totalRowNum = summaryEndRow + 1;
 
-  // صف الإجمالي الكلي TOTAL
   ws[`G${totalRowNum}`] = { t: "s", v: "TOTAL", s: cellStyle("1E293B", "FFFFFF", true, "right") };
   ws[`H${totalRowNum}`] = {
     t: "n",
@@ -646,6 +768,16 @@ function initSplashScreen() {
 
 document.addEventListener("DOMContentLoaded", () => {
   initSplashScreen();
+  initPasswordToggles();
+  updateConnectionStatusBadge();
+  window.addEventListener("online", () => {
+    updateConnectionStatusBadge();
+    pullFromSheetBackground();
+    pushToSheetBackground();
+  });
+  window.addEventListener("offline", updateConnectionStatusBadge);
+
+  ensureRoleSelectInAddRepForm();
   getAccounts();
   document.getElementById("tripDate").value = new Date().toISOString().slice(0, 10);
 
@@ -770,6 +902,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("tripForm").addEventListener("submit", (e) => {
     e.preventDefault();
+    if (!navigator.onLine) {
+      alert("النت فاصل يا برنس متقدرش تسجل الرحله دلوقتي حاول تاني لمى النت يرجع");
+      return;
+    }
+
     const user = getCurrentUser();
     if (!user) return;
 
@@ -799,22 +936,26 @@ document.addEventListener("DOMContentLoaded", () => {
     e.preventDefault();
     const name = document.getElementById("newRepName").value.trim();
     const phone = normalizePhone(document.getElementById("newRepPhone").value);
+    const roleSelect = document.getElementById("newRepRole");
+    const selectedRole = roleSelect && roleSelect.value === "admin" ? "admin" : "rep";
+
     if (!name || !phone) {
-      alert("من فضلك أدخل اسم المندوب ورقم تليفونه.");
+      alert("من فضلك أدخل الاسم ورقم التليفون.");
       return;
     }
 
-    if (findAccountByPhone(phone)) {
+    const existing = findAccountByPhone(phone);
+    if (existing) {
       alert("رقم التليفون ده مسجل بالفعل.");
       return;
     }
 
     const list = getAccounts();
     list.push({
-      id: `rep_${Date.now()}`,
+      id: `${selectedRole}_${Date.now()}`,
       name,
       phone,
-      role: "rep",
+      role: selectedRole,
       password: "",
       avatar: ""
     });
@@ -822,8 +963,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     document.getElementById("newRepName").value = "";
     document.getElementById("newRepPhone").value = "";
+    if (roleSelect) roleSelect.value = "rep";
+
     const user = getCurrentUser();
-    if (user) refreshRepSelect(user, user.role === "admin");
+    if (user) refreshRepSelect(user, isAccountAdmin(user));
     renderRepsList();
     pushToSheetBackground();
   });
@@ -839,6 +982,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("fromDate").addEventListener("change", renderTripsTable);
   document.getElementById("toDate").addEventListener("change", renderTripsTable);
+  document.getElementById("tripSearchInput")?.addEventListener("input", renderTripsTable);
   document.getElementById("exportExcelBtn").addEventListener("click", exportTripsToExcel);
 
   const existingUser = getCurrentUser();

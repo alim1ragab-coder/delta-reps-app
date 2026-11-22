@@ -5,9 +5,9 @@
 body {
   margin: 0;
   font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-  background: #f1f5f9;
-  color: #0f172a;
-  line-height: 1.45;
+  background: #eef2f6;
+  color: #1e293b;
+  line-height: 1.5;
 }
 
 .hidden {
@@ -19,8 +19,8 @@ body {
   position: fixed;
   inset: 0;
   z-index: 9999;
-  background: #0f172a;
-  color: #ffffff;
+  background: #132a2e;
+  color: #f8fafc;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -44,14 +44,15 @@ body {
 
 /* الهيدر العلوي */
 .app-header.topbar {
-  background: #0f172a;
-  color: #ffffff;
+  background: #132a2e;
+  color: #f8fafc;
   padding: 10px 14px;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  box-shadow: 0 2px 10px rgba(19, 42, 46, 0.14);
 }
 
 .brand-box {
@@ -92,31 +93,52 @@ body {
   height: 34px;
   border-radius: 50%;
   object-fit: cover;
-  border: 2px solid #38bdf8;
+  border: 2px solid #5eead4;
 }
 
 .user-badge {
-  background: #1e293b;
-  color: #f8fafc;
-  padding: 5px 9px;
+  background: #1e3d42;
+  color: #f1f5f9;
+  padding: 5px 10px;
   border-radius: 8px;
   font-size: 12px;
   font-weight: 600;
 }
 
+.status-badge {
+  padding: 5px 10px;
+  border-radius: 8px;
+  font-size: 11.5px;
+  font-weight: 700;
+  border: 1px solid transparent;
+}
+
+.status-online {
+  background: #0f3f39;
+  color: #5eead4;
+  border-color: #14b8a6;
+}
+
+.status-offline {
+  background: #451a1a;
+  color: #fca5a5;
+  border-color: #ef4444;
+}
+
 /* الحاوية والكروت */
 .container {
   max-width: 980px;
-  margin: 12px auto;
-  padding: 0 8px;
+  margin: 14px auto;
+  padding: 0 10px;
 }
 
 .card {
   background: #ffffff;
-  border-radius: 12px;
-  padding: 12px;
-  box-shadow: 0 3px 14px rgba(15, 23, 42, 0.06);
-  margin-bottom: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 14px;
+  box-shadow: 0 3px 14px rgba(15, 23, 42, 0.05);
+  margin-bottom: 14px;
 }
 
 .auth-card {
@@ -137,48 +159,85 @@ h3 {
 }
 
 .hint {
-  font-size: 12.5px;
+  font-size: 12px;
   color: #475569;
   margin: 3px 0 10px;
 }
 
-/* الحقول والنماذج */
+/* الحقول والنماذج - واضحة ومحددة جيداً */
 .field {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
   min-width: 0;
 }
 
 .field label {
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   color: #1e293b;
 }
 
 .field input,
-.field select {
+.field select,
+.inline-form input,
+.inline-form select,
+.lab-grid input,
+.lab-grid select {
   width: 100%;
   min-width: 0;
-  padding: 7px 9px;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
+  padding: 8px 10px;
+  border: 1.5px solid #94a3b8;
+  border-radius: 9px;
   font-size: 13px;
-  background: #ffffff;
+  background: #f8fafc;
   color: #0f172a;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
 }
 
 .field input:focus,
-.field select:focus {
+.field select:focus,
+.inline-form input:focus,
+.inline-form select:focus,
+.lab-grid input:focus,
+.lab-grid select:focus {
   outline: none;
-  border-color: #2563eb;
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.14);
+  border-color: #0f766e;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.14);
+}
+
+.password-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.password-wrap input {
+  padding-left: 44px;
+}
+
+.password-toggle-btn {
+  position: absolute;
+  left: 6px;
+  background: #e2e8f0;
+  color: #1e293b;
+  border: none;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.password-toggle-btn:hover {
+  background: #cbd5e1;
 }
 
 .grid-form {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
+  gap: 8px;
 }
 
 .full-width {
@@ -188,38 +247,34 @@ h3 {
 .inline-form {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
   align-items: center;
 }
 
-.inline-form input {
+.inline-form input,
+.inline-form select {
   flex: 1 1 150px;
-  min-width: 0;
-  padding: 7px 9px;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  font-size: 13px;
 }
 
 .filters-row {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
-  margin-bottom: 8px;
+  gap: 8px;
+  margin-bottom: 10px;
 }
 
 .actions-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
   margin-top: 12px;
 }
 
 /* الأزرار */
 .btn {
   border: none;
-  border-radius: 8px;
-  padding: 7px 12px;
+  border-radius: 9px;
+  padding: 8px 13px;
   font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
@@ -235,17 +290,17 @@ h3 {
 }
 
 .btn-primary {
-  background: #2563eb;
+  background: #0f766e;
   color: #ffffff;
 }
 
 .btn-success {
-  background: #16a34a;
+  background: #15803d;
   color: #ffffff;
 }
 
 .btn-danger {
-  background: #dc2626;
+  background: #b91c1c;
   color: #ffffff;
 }
 
@@ -261,7 +316,7 @@ h3 {
 }
 
 .card .btn-outline {
-  color: #0f172a;
+  color: #1e293b;
   border-color: #cbd5e1;
 }
 
@@ -270,7 +325,7 @@ h3 {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
 .tab-btn {
@@ -278,14 +333,14 @@ h3 {
   color: #1e293b;
   border: none;
   border-radius: 9px;
-  padding: 7px 12px;
+  padding: 8px 13px;
   font-size: 12.5px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
 }
 
 .tab-btn.active {
-  background: #2563eb;
+  background: #0f766e;
   color: #ffffff;
 }
 
@@ -303,7 +358,7 @@ h3 {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 
 .summary-text {
@@ -327,23 +382,23 @@ table {
 
 th,
 td {
-  border: 1px solid #e2e8f0;
-  padding: 7px 8px;
+  border: 1px solid #cbd5e1;
+  padding: 8px 9px;
   text-align: right;
   white-space: nowrap;
 }
 
 th {
-  background: #f8fafc;
+  background: #f1f5f9;
   color: #0f172a;
   font-weight: 700;
 }
 
-/* تبويب التحاليل: كل خانتين جنب بعض بمسافات متقاربة */
+/* تبويب التحاليل */
 .lab-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
+  gap: 8px;
 }
 
 .lab-full-row {
@@ -351,46 +406,42 @@ th {
 }
 
 .lab-grid label {
-  font-size: 11.5px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #1e293b;
   margin-bottom: 1px;
 }
 
-.lab-grid input {
-  padding: 6px 8px;
-  font-size: 13px;
-  border-radius: 8px;
-}
-
-/* شريط واحد شيك للنسب الثلاث */
+/* شريط واحد متناسق للنسب الثلاث */
 .lab-results-row {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
-  margin-top: 8px;
+  gap: 8px;
+  margin-top: 10px;
   background: #f8fafc;
   border: 1px solid #cbd5e1;
-  border-radius: 10px;
-  padding: 6px;
+  border-radius: 12px;
+  padding: 8px;
 }
 
 .lab-metric-card {
   background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 6px 5px;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  padding: 8px 6px;
   text-align: center;
   min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  gap: 3px;
 }
 
 .lab-metric-label {
   font-size: 11px;
   color: #475569;
-  font-weight: 600;
+  font-weight: 700;
   white-space: nowrap;
 }
 
@@ -400,41 +451,47 @@ th {
   color: #0f172a;
 }
 
-/* مربع الخصم بالطن باللون الأحمر */
+/* كارت الخصم بالطن صغير وفي الوسط بلون أحمر هادي */
 .lab-deduction-box {
-  margin-top: 6px;
-  background: #dc2626;
-  border: 1px solid #b91c1c;
-  border-radius: 10px;
-  padding: 8px 12px;
+  max-width: 260px;
+  width: 100%;
+  margin: 10px auto 0;
+  background: #fef2f2;
+  border: 1.5px solid #fca5a5;
+  border-radius: 11px;
+  padding: 8px 14px;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  justify-content: center;
+  text-align: center;
+  gap: 2px;
 }
 
 .lab-deduction-label {
-  font-size: 12.5px;
+  font-size: 11.5px;
   font-weight: 700;
-  color: #ffffff;
+  color: #991b1b;
 }
 
 .lab-deduction-value {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 800;
-  color: #ffffff;
+  color: #b91c1c;
 }
 
 .lab-save-row {
-  margin-top: 8px;
+  margin-top: 10px;
   display: flex;
-  gap: 6px;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
 }
 
-/* قائمة المناديب */
+/* قائمة المناديب والمشرفين */
 .admin-block {
-  padding-top: 8px;
-  margin-top: 10px;
+  padding-top: 10px;
+  margin-top: 12px;
   border-top: 1px solid #e2e8f0;
 }
 
@@ -450,7 +507,7 @@ th {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 7px;
 }
 
 .reps-list li {
@@ -459,9 +516,9 @@ th {
   justify-content: space-between;
   gap: 8px;
   background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 9px;
-  padding: 7px 9px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 8px 10px;
 }
 
 .rep-row-info {
@@ -488,22 +545,23 @@ th {
 /* تجاوب الشاشات الصغيرة جداً */
 @media (max-width: 480px) {
   .card {
-    padding: 10px;
+    padding: 11px;
   }
 
   .grid-form,
-  .lab-grid {
+  .lab-grid,
+  .filters-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 5px;
+    gap: 6px;
   }
 
   .lab-results-row {
-    gap: 5px;
-    padding: 5px;
+    gap: 6px;
+    padding: 6px;
   }
 
   .lab-metric-card {
-    padding: 6px 4px;
+    padding: 7px 4px;
   }
 
   .lab-metric-label {
@@ -512,5 +570,10 @@ th {
 
   .lab-metric-value {
     font-size: 13.5px;
+  }
+
+  .lab-deduction-box {
+    max-width: 230px;
+    padding: 7px 12px;
   }
 }
