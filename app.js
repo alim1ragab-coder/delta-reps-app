@@ -284,7 +284,7 @@ function pushToSheetBackground() {
   } catch (_) {}
 }
 
-async function pullFromSheetBackground(timeoutMs = 3500) {
+async function pullFromSheetBackground(timeoutMs = 2200) {
   if (!SHEET_SYNC_URL || !navigator.onLine) return false;
   const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
   const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
@@ -375,16 +375,13 @@ async function handlePhoneAuthSubmit() {
     return;
   }
 
-  if (!navigator.onLine) {
-    alert("النت فاصل ومفيش اتصال حالياً. يمكنك استخدام التحاليل بدون إنترنت.");
-    return;
-  }
-
   isAuthSubmitting = true;
   if (submitBtn) submitBtn.disabled = true;
 
   try {
-    await pullFromSheetBackground(2200);
+    if (navigator.onLine) {
+      await pullFromSheetBackground(1800);
+    }
     const account = ensureAdminOrApprovedAccount(phone);
 
     if (!account) {
@@ -428,7 +425,7 @@ async function handlePhoneAuthSubmit() {
     localStorage.setItem(KEYS.session, account.phone);
     document.getElementById("loginPasswordInput").value = "";
     applyRoleUI(account);
-    pullFromSheetBackground(2500);
+    pullFromSheetBackground(2000);
   } finally {
     isAuthSubmitting = false;
     if (submitBtn) submitBtn.disabled = false;
@@ -922,41 +919,17 @@ function switchTab(tabId) {
   if (tabId === "recordsTab") {
     currentTripsPage = 1;
     renderTripsTable();
-    pullFromSheetBackground(2500);
+    pullFromSheetBackground(2000);
   }
-}
-
-function hideSplashImmediately() {
-  if (typeof window.__dismissSplashNow === "function") {
-    window.__dismissSplashNow();
-    return;
-  }
-  const splash = document.getElementById("splashScreen");
-  if (!splash) return;
-  splash.style.setProperty("opacity", "0", "important");
-  splash.style.setProperty("pointer-events", "none", "important");
-  splash.style.setProperty("visibility", "hidden", "important");
-  setTimeout(() => {
-    splash.style.setProperty("display", "none", "important");
-  }, 150);
-}
-
-function initSplashScreen() {
-  const skipBtn = document.getElementById("skipSplashBtn");
-  if (skipBtn) {
-    skipBtn.addEventListener("click", hideSplashImmediately);
-  }
-  setTimeout(hideSplashImmediately, 650);
 }
 
 document.addEventListener("DOMContentLoaded", () => {
   try {
-    initSplashScreen();
     initPasswordToggles();
     updateConnectionStatusBadge();
     window.addEventListener("online", () => {
       updateConnectionStatusBadge();
-      pullFromSheetBackground(2500);
+      pullFromSheetBackground(2000);
       pushToSheetBackground();
     });
     window.addEventListener("offline", updateConnectionStatusBadge);
@@ -1166,7 +1139,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const existingUser = getCurrentUser();
     if (existingUser) {
       applyRoleUI(existingUser);
-      pullFromSheetBackground(2500);
+      pullFromSheetBackground(2000);
     }
   } catch (err) {
     console.error("App init error:", err);
