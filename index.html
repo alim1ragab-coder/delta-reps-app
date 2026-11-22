@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#132a2e" />
   <title>مناديب الدلتا TAGADDOD - BY.ALI RAGAB</title>
   <link rel="manifest" href="manifest.json" />
-  <link rel="stylesheet" href="styles.css?v=20261122-ar1" />
+  <link rel="stylesheet" href="styles.css?v=20261122-ar2" />
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 </head>
 <body>
@@ -37,21 +37,39 @@
   </header>
 
   <main class="container">
-    <!-- شاشة تسجيل الدخول -->
+    <!-- شاشة تسجيل الدخول وتعيين كلمة السر لأول مرة -->
     <section id="authSection" class="card auth-card hidden">
-      <h2>تسجيل الدخول</h2>
-      <p class="hint">أدخل رقم تليفونك وكلمة السر للدخول على النظام.</p>
+      <h2 id="authTitle">تسجيل الدخول</h2>
+      <p id="authHint" class="hint">أدخل رقم تليفونك للمتابعة؛ إذا كان دخولك الأول سيظهر لك تعيين كلمة سر جديدة.</p>
 
       <div class="field">
         <label for="loginPhoneInput">رقم التليفون</label>
-        <input type="tel" id="loginPhoneInput" placeholder="مثال: 01012345678" />
+        <input type="tel" id="loginPhoneInput" placeholder="مثال: 01012345678" autocomplete="tel" />
       </div>
 
-      <div class="field">
+      <div id="existingPasswordBox" class="field">
         <label for="loginPasswordInput">كلمة السر</label>
         <div class="password-wrap">
-          <input type="password" id="loginPasswordInput" placeholder="أدخل كلمة السر" />
+          <input type="password" id="loginPasswordInput" placeholder="أدخل كلمة السر" autocomplete="current-password" />
           <button type="button" class="password-toggle-btn" data-target="loginPasswordInput">إظهار</button>
+        </div>
+      </div>
+
+      <div id="firstTimeSetupBox" class="hidden">
+        <div class="field" style="margin-bottom: 8px;">
+          <label for="setupPasswordInput">تعيين كلمة سر جديدة (4 خانات فأكثر)</label>
+          <div class="password-wrap">
+            <input type="password" id="setupPasswordInput" placeholder="اكتب كلمة السر الجديدة" autocomplete="new-password" />
+            <button type="button" class="password-toggle-btn" data-target="setupPasswordInput">إظهار</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="confirmPasswordInput">تأكيد كلمة السر</label>
+          <div class="password-wrap">
+            <input type="password" id="confirmPasswordInput" placeholder="أعد كتابة كلمة السر" autocomplete="new-password" />
+            <button type="button" class="password-toggle-btn" data-target="confirmPasswordInput">إظهار</button>
+          </div>
         </div>
       </div>
 
