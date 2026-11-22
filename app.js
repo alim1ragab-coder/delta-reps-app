@@ -249,7 +249,7 @@ function mergeAccountsData(localAccounts, remoteAccounts) {
       phone: cleanPhone || (prev && prev.phone) || "",
       role: resolvedRole,
       password: remotePass || localPass || "",
-      avatar: (acc && acc.avatar) || (prev && acc.avatar) || ""
+      avatar: (acc && acc.avatar) || (prev && prev.avatar) || ""
     });
   });
 
@@ -605,7 +605,7 @@ function renderRepsList() {
   });
 }
 
-// المشرف يرى جميع الرحلات، والمندوب يرى رحلاته كاملة
+// المشرف يرى جميع الرحلات (عدد مفتوح)، والمندوب يرى رحلاته كاملة
 function getAllUserTrips(user) {
   const allTrips = getTrips();
   if (!user) return [];
@@ -927,14 +927,18 @@ function switchTab(tabId) {
 }
 
 function hideSplashImmediately() {
+  if (typeof window.__dismissSplashNow === "function") {
+    window.__dismissSplashNow();
+    return;
+  }
   const splash = document.getElementById("splashScreen");
   if (!splash) return;
-  splash.style.transition = "opacity 0.25s ease";
-  splash.style.opacity = "0";
-  splash.style.pointerEvents = "none";
+  splash.style.setProperty("opacity", "0", "important");
+  splash.style.setProperty("pointer-events", "none", "important");
+  splash.style.setProperty("visibility", "hidden", "important");
   setTimeout(() => {
-    splash.style.display = "none";
-  }, 260);
+    splash.style.setProperty("display", "none", "important");
+  }, 150);
 }
 
 function initSplashScreen() {
@@ -942,7 +946,7 @@ function initSplashScreen() {
   if (skipBtn) {
     skipBtn.addEventListener("click", hideSplashImmediately);
   }
-  setTimeout(hideSplashImmediately, 1400);
+  setTimeout(hideSplashImmediately, 650);
 }
 
 document.addEventListener("DOMContentLoaded", () => {
