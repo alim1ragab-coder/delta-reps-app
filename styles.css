@@ -576,4 +576,10 @@ th {
     max-width: 230px;
     padding: 7px 12px;
   }
+}.offline-prompt {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
 }

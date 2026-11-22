@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#132a2e" />
   <title>مناديب الدلتا TAGADDOD - BY.ALI RAGAB</title>
   <link rel="manifest" href="manifest.json" />
-  <link rel="stylesheet" href="styles.css?v=20261122-v2" />
+  <link rel="stylesheet" href="styles.css?v=20261122-v3" />
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 </head>
 <body>
@@ -75,9 +75,13 @@
         <input type="file" id="loginAvatarInput" accept="image/*" />
       </div>
 
+      <div id="offlineLoginPromptBox" class="offline-prompt hidden">
+        <p class="hint">النت فاصل حالياً ومفيش اتصال لتسجيل الدخول، تحب تخش على التحاليل دلوقتي؟</p>
+        <button id="openOfflineAnalysisBtn" type="button" class="btn btn-teal">دخول على التحاليل</button>
+      </div>
+
       <div class="actions-row">
         <button id="phoneAuthBtn" type="button" class="btn btn-primary">متابعة</button>
-        <button id="openOfflineAnalysisBtn" type="button" class="btn btn-outline">وضع التحاليل (بدون نت)</button>
       </div>
     </section>
 
