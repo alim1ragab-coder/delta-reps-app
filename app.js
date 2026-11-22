@@ -14,6 +14,14 @@ const ADMIN_PHONES = [
   "01276341407"
 ];
 
+const DEFAULT_REPS = [
+  { id: "rep_1", name: "رضا ماضي", phone: "01011111111", role: "rep", password: "", avatar: "" },
+  { id: "rep_2", name: "محمد حاتم", phone: "01022222222", role: "rep", password: "", avatar: "" },
+  { id: "rep_3", name: "محمد السيد", phone: "01033333333", role: "rep", password: "", avatar: "" }
+];
+
+let isAuthSubmitting = false;
+
 function normalizePhone(phone) {
   return (phone || "").toString().replace(/\D/g, "").trim();
 }
@@ -277,10 +285,18 @@ function pushToSheetBackground() {
   } catch (_) {}
 }
 
-async function pullFromSheetBackground() {
+async function pullFromSheetBackground(timeoutMs = 3500) {
   if (!SHEET_SYNC_URL || !navigator.onLine) return false;
+  const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+
   try {
-    const res = await fetch(SHEET_SYNC_URL, { method: "GET", cache: "no-store" });
+    const res = await fetch(SHEET_SYNC_URL, {
+      method: "GET",
+      cache: "no-store",
+      signal: controller ? controller.signal : undefined
+    });
+    if (timer) clearTimeout(timer);
     if (!res.ok) return false;
     const json = await res.json();
     if (!json || !json.ok || !json.data) return false;
@@ -304,13 +320,56 @@ async function pullFromSheetBackground() {
     }
     return true;
   } catch (_) {
+    if (timer) clearTimeout(timer);
     return false;
   }
 }
 
-async function handlePhoneAuthSubmit() {
+function isFirstTimeUserPhone(phone) {
+  const clean = normalizePhone(phone);
+  if (!clean) return false;
+  const acc = ensureAdminOrApprovedAccount(clean);
+  return Boolean(acc && !acc.password);
+}
+
+function syncAuthFieldsForPhone() {
   const phone = normalizePhone(document.getElementById("loginPhoneInput")?.value);
-  const enteredPass = document.getElementById("loginPasswordInput")?.value || "";
+  const existingBox = document.getElementById("existingPasswordBox");
+  const setupBox = document.getElementById("firstTimeSetupBox");
+  const titleEl = document.getElementById("authTitle");
+  const hintEl = document.getElementById("authHint");
+  const submitBtn = document.getElementById("phoneAuthBtn");
+
+  if (!existingBox || !setupBox || !submitBtn) return;
+
+  if (!phone) {
+    existingBox.classList.remove("hidden");
+    setupBox.classList.add("hidden");
+    if (titleEl) titleEl.textContent = "تسجيل الدخول";
+    if (hintEl) hintEl.textContent = "أدخل رقم تليفونك للمتابعة؛ إذا كان دخولك الأول سيظهر لك تعيين كلمة سر جديدة.";
+    submitBtn.textContent = "تسجيل الدخول";
+    return;
+  }
+
+  if (isFirstTimeUserPhone(phone)) {
+    existingBox.classList.add("hidden");
+    setupBox.classList.remove("hidden");
+    if (titleEl) titleEl.textContent = "تعيين كلمة سر لأول مرة";
+    if (hintEl) hintEl.textContent = "هذا أول دخول لهذا الرقم؛ قم بتعيين كلمة سر جديدة لحسابك.";
+    submitBtn.textContent = "حفظ كلمة السر والدخول";
+  } else {
+    existingBox.classList.remove("hidden");
+    setupBox.classList.add("hidden");
+    if (titleEl) titleEl.textContent = "تسجيل الدخول";
+    if (hintEl) hintEl.textContent = "أدخل كلمة السر المسجلة لحسابك.";
+    submitBtn.textContent = "تسجيل الدخول";
+  }
+}
+
+async function handlePhoneAuthSubmit() {
+  if (isAuthSubmitting) return;
+  const submitBtn = document.getElementById("phoneAuthBtn");
+  const phone = normalizePhone(document.getElementById("loginPhoneInput")?.value);
 
   if (!phone) {
     alert("من فضلك أدخل رقم التليفون.");
@@ -322,43 +381,102 @@ async function handlePhoneAuthSubmit() {
     return;
   }
 
-  await pullFromSheetBackground();
-  const account = ensureAdminOrApprovedAccount(phone);
+  isAuthSubmitting = true;
+  if (submitBtn) submitBtn.disabled = true;
 
-  if (!account) {
-    alert("هذا الرقم غير مسجل في قائمة المناديب أو المشرفين. تواصل مع المشرف لإضافتك.");
-    return;
-  }
+  try {
+    await pullFromSheetBackground(2200);
+    const account = ensureAdminOrApprovedAccount(phone);
 
-  if (!account.password) {
-    if (enteredPass.length < 4) {
-      alert("أول مرة دخول: اكتب كلمة سر من 4 خانات أو أكثر ثم اضغط تسجيل الدخول.");
+    if (!account) {
+      alert("هذا الرقم غير مسجل في قائمة المناديب أو المشرفين. تواصل مع المشرف لإضافتك.");
       return;
     }
-    const updatedAcc = updateAccount(account.id, { password: enteredPass });
-    localStorage.setItem(KEYS.session, updatedAcc.phone);
-    applyRoleUI(updatedAcc);
-    pushToSheetBackground();
+
+    if (!account.password) {
+      syncAuthFieldsForPhone();
+      const newPass = document.getElementById("setupPasswordInput")?.value || "";
+      const confirmPass = document.getElementById("confirmPasswordInput")?.value || "";
+
+      if (newPass.length < 4) {
+        alert("من فضلك اكتب كلمة سر جديدة من 4 خانات أو أكثر.");
+        return;
+      }
+      if (newPass !== confirmPass) {
+        alert("كلمة السر وتأكيدها غير متطابقين.");
+        return;
+      }
+
+      const updatedAcc = updateAccount(account.id, { password: newPass });
+      localStorage.setItem(KEYS.session, updatedAcc.phone);
+      document.getElementById("setupPasswordInput").value = "";
+      document.getElementById("confirmPasswordInput").value = "";
+      applyRoleUI(updatedAcc);
+      pushToSheetBackground();
+      return;
+    }
+
+    const enteredPass = document.getElementById("loginPasswordInput")?.value || "";
+    if (!enteredPass) {
+      alert("من فضلك أدخل كلمة السر.");
+      return;
+    }
+    if (enteredPass !== account.password) {
+      alert("كلمة السر غير صحيحة.");
+      return;
+    }
+
+    localStorage.setItem(KEYS.session, account.phone);
+    document.getElementById("loginPasswordInput").value = "";
+    applyRoleUI(account);
+    pullFromSheetBackground(2500);
+  } finally {
+    isAuthSubmitting = false;
+    if (submitBtn) submitBtn.disabled = false;
+  }
+}
+
+function setActiveView(viewName) {
+  const authSec = document.getElementById("authSection");
+  const profileSec = document.getElementById("profileModalSection");
+  const appSec = document.getElementById("appSection");
+  const loginBtn = document.getElementById("openLoginFromSamplesBtn");
+  const backBtn = document.getElementById("backToSamplesBtn");
+  const hasUser = Boolean(getCurrentUser());
+
+  if (viewName === "auth") {
+    authSec?.classList.remove("hidden");
+    profileSec?.classList.add("hidden");
+    appSec?.classList.add("hidden");
+    loginBtn?.classList.add("hidden");
+    backBtn?.classList.remove("hidden");
+    syncAuthFieldsForPhone();
     return;
   }
 
-  if (enteredPass !== account.password) {
-    alert("كلمة السر غير صحيحة.");
+  if (viewName === "profile") {
+    authSec?.classList.add("hidden");
+    profileSec?.classList.remove("hidden");
+    appSec?.classList.add("hidden");
+    loginBtn?.classList.add("hidden");
+    backBtn?.classList.add("hidden");
     return;
   }
 
-  localStorage.setItem(KEYS.session, account.phone);
-  applyRoleUI(account);
-  pullFromSheetBackground();
+  authSec?.classList.add("hidden");
+  profileSec?.classList.add("hidden");
+  appSec?.classList.remove("hidden");
+  backBtn?.classList.add("hidden");
+  if (!hasUser) {
+    loginBtn?.classList.remove("hidden");
+  } else {
+    loginBtn?.classList.add("hidden");
+  }
 }
 
 function applyRoleUI(user) {
   const isAdmin = isAccountAdmin(user);
-  document.getElementById("authSection")?.classList.add("hidden");
-  document.getElementById("profileModalSection")?.classList.add("hidden");
-  document.getElementById("appSection")?.classList.remove("hidden");
-  document.getElementById("openLoginFromSamplesBtn")?.classList.add("hidden");
-  document.getElementById("backToSamplesBtn")?.classList.add("hidden");
+  setActiveView("app");
   document.getElementById("logoutBtn")?.classList.remove("hidden");
   document.getElementById("openChangePassBtn")?.classList.remove("hidden");
 
@@ -456,7 +574,7 @@ function renderRepsList() {
   members.forEach((member) => {
     const memberIsAdmin = isAccountAdmin(member);
     const roleLabel = memberIsAdmin ? "مشرف" : "مندوب";
-    const statusText = member.password ? "تم تعيين كلمة السر" : "بانتظار الدخول لأول مرة";
+    const statusText = member.password ? "تم تعيين كلمة السر" : "بانتظار تعيين كلمة السر";
     const isSelf = normalizePhone(member.phone) === currentPhone;
 
     const li = document.createElement("li");
@@ -714,21 +832,14 @@ function exportTripsToExcel() {
 }
 
 function openLoginScreen() {
-  document.getElementById("appSection")?.classList.add("hidden");
-  document.getElementById("profileModalSection")?.classList.add("hidden");
-  document.getElementById("authSection")?.classList.remove("hidden");
-  document.getElementById("openLoginFromSamplesBtn")?.classList.add("hidden");
-  document.getElementById("backToSamplesBtn")?.classList.remove("hidden");
+  isAuthSubmitting = false;
+  const submitBtn = document.getElementById("phoneAuthBtn");
+  if (submitBtn) submitBtn.disabled = false;
+  setActiveView("auth");
 }
 
 function showSamplesView() {
-  document.getElementById("authSection")?.classList.add("hidden");
-  document.getElementById("profileModalSection")?.classList.add("hidden");
-  document.getElementById("appSection")?.classList.remove("hidden");
-  document.getElementById("backToSamplesBtn")?.classList.add("hidden");
-  if (!getCurrentUser()) {
-    document.getElementById("openLoginFromSamplesBtn")?.classList.remove("hidden");
-  }
+  setActiveView("app");
   switchTab("analysisTab");
 }
 
@@ -750,7 +861,7 @@ function switchTab(tabId) {
   }
   if (tabId === "recordsTab") {
     renderTripsTable();
-    pullFromSheetBackground();
+    pullFromSheetBackground(2500);
   }
 }
 
@@ -780,7 +891,7 @@ document.addEventListener("DOMContentLoaded", () => {
     updateConnectionStatusBadge();
     window.addEventListener("online", () => {
       updateConnectionStatusBadge();
-      pullFromSheetBackground();
+      pullFromSheetBackground(2500);
       pushToSheetBackground();
     });
     window.addEventListener("offline", updateConnectionStatusBadge);
@@ -794,19 +905,23 @@ document.addEventListener("DOMContentLoaded", () => {
       tripDateEl.value = new Date().toISOString().slice(0, 10);
     }
 
+    const loginPhoneEl = document.getElementById("loginPhoneInput");
+    if (loginPhoneEl) {
+      loginPhoneEl.addEventListener("input", syncAuthFieldsForPhone);
+      loginPhoneEl.addEventListener("change", syncAuthFieldsForPhone);
+    }
+
     document.getElementById("openLoginFromSamplesBtn")?.addEventListener("click", openLoginScreen);
     document.getElementById("backToSamplesBtn")?.addEventListener("click", showSamplesView);
     document.getElementById("cancelLoginBtn")?.addEventListener("click", showSamplesView);
     document.getElementById("phoneAuthBtn")?.addEventListener("click", handlePhoneAuthSubmit);
 
     document.getElementById("openChangePassBtn")?.addEventListener("click", () => {
-      document.getElementById("appSection")?.classList.add("hidden");
-      document.getElementById("profileModalSection")?.classList.remove("hidden");
+      setActiveView("profile");
     });
 
     document.getElementById("closeProfileModalBtn")?.addEventListener("click", () => {
-      document.getElementById("profileModalSection")?.classList.add("hidden");
-      document.getElementById("appSection")?.classList.remove("hidden");
+      setActiveView("app");
     });
 
     document.getElementById("saveProfileChangesBtn")?.addEventListener("click", async () => {
@@ -876,6 +991,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     document.getElementById("logoutBtn")?.addEventListener("click", () => {
       localStorage.removeItem(KEYS.session);
+      setActiveView("app");
+      switchTab("analysisTab");
       location.reload();
     });
 
@@ -974,7 +1091,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const existingUser = getCurrentUser();
     if (existingUser) {
       applyRoleUI(existingUser);
-      pullFromSheetBackground();
+      pullFromSheetBackground(2500);
     }
   } catch (err) {
     console.error("App init error:", err);
