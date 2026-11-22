@@ -18,14 +18,32 @@
   let toastTimer = null;
 
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
   const normalizePhone = (value) => {
     let digits = String(value || "").replace(/\D/g, "");
     if (digits.length === 10 && /^(10|11|12|15)/.test(digits)) digits = `0${digits}`;
     return digits;
   };
+
   const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
   }[ch]));
+
+  const formatTimestamp = (raw) => {
+    const fallbackNow = new Date();
+    const d = raw ? new Date(raw) : fallbackNow;
+    if (Number.isNaN(d.getTime())) return String(raw || "");
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    const hours24 = d.getHours();
+    const period = hours24 >= 12 ? "م" : "ص";
+    const hours12 = String(hours24 % 12 || 12).padStart(2, "0");
+    const mins = String(d.getMinutes()).padStart(2, "0");
+    const secs = String(d.getSeconds()).padStart(2, "0");
+    return `${yyyy}/${mm}/${dd} - ${hours12}:${mins}:${secs} ${period}`;
+  };
+
   const isAdmin = () => state.user?.role === "admin";
   const sessionToken = () => localStorage.getItem(CONFIG.sessionKey) || "";
 
@@ -64,8 +82,6 @@
     badge.classList.toggle("status-offline", !online);
   }
 
-  // JSONP is used for GET responses; POST uses text/plain/no-cors to avoid a CORS preflight.
-  // The server stores each POST result briefly and it is retrieved through the JSONP result endpoint.
   function apiGet(params = {}, timeoutMs = 10000) {
     return new Promise((resolve, reject) => {
       if (!CONFIG.sheetUrl) return reject(new Error("لم يتم ضبط رابط Google Apps Script."));
@@ -114,7 +130,11 @@
       if (!navigator.onLine) throw new Error("انقطع الإنترنت قبل تأكيد التسجيل. راجع سجل الرحلات قبل إعادة المحاولة.");
       const result = await apiGet({ action: "result", requestId }, 5000);
       if (result && result.pending !== true) {
-        if (!result.ok) { const error = new Error(result.error || "تعذر تنفيذ العملية."); error.code = result.code || ""; throw error; }
+        if (!result.ok) {
+          const error = new Error(result.error || "تعذر تنفيذ العملية.");
+          error.code = result.code || "";
+          throw error;
+        }
         return result;
       }
       await sleep(450);
@@ -123,14 +143,14 @@
   }
 
   function cacheState() {
-    try { localStorage.setItem(CONFIG.cacheKey, JSON.stringify(state)); } catch (_) { /* quota */ }
+    try { localStorage.setItem(CONFIG.cacheKey, JSON.stringify(state)); } catch (_) {}
   }
 
   function readCachedState() {
     try {
       const saved = JSON.parse(localStorage.getItem(CONFIG.cacheKey) || "null");
       if (saved && typeof saved === "object") state = { ...state, ...saved };
-    } catch (_) { /* ignore invalid cache */ }
+    } catch (_) {}
   }
 
   function applyServerState(data) {
@@ -273,10 +293,19 @@
   }
 
   function getVisibleTrips() {
-    const from = $("fromDate")?.value || "";
-    const to = $("toDate")?.value || "";
-    const query = ($("tripSearchInput")?.value || "").trim().toLocaleLowerCase("ar-EG");
+    const from = isAdmin() ? ($("fromDate")?.value || "") : "";
+    const to = isAdmin() ? ($("toDate")?.value || "") : "";
+    const query = isAdmin() ? (($("tripSearchInput")?.value || "").trim().toLocaleLowerCase("ar-EG")) : "";
+    const currentPhone = normalizePhone(state.user?.phone);
+    const currentName = (state.user?.name || "").trim();
+
     return state.trips.filter((trip) => {
+      if (!isAdmin()) {
+        const matchPhone = trip.repPhone && normalizePhone(trip.repPhone) === currentPhone;
+        const matchOwner = trip.ownerPhone && normalizePhone(trip.ownerPhone) === currentPhone;
+        const matchName = currentName && (trip.repName || "").trim() === currentName;
+        if (!matchPhone && !matchOwner && !matchName) return false;
+      }
       if (from && trip.date < from) return false;
       if (to && trip.date > to) return false;
       const text = `${trip.repName || ""} ${trip.place || ""} ${trip.client || ""}`.toLocaleLowerCase("ar-EG");
@@ -294,7 +323,8 @@
     tbody.innerHTML = "";
     visible.forEach((trip) => {
       const tr = document.createElement("tr");
-      tr.innerHTML = `<td>${escapeHtml(trip.timestamp || "")}</td><td>${escapeHtml(trip.date || "")}</td><td>${escapeHtml(trip.repName || "")}</td><td>${escapeHtml(trip.place || "")}</td><td>${escapeHtml(trip.client || "")}</td><td>${Number(trip.allowance || 0).toFixed(2)}</td>`;
+      const formattedTs = formatTimestamp(trip.timestamp);
+      tr.innerHTML = `<td>${escapeHtml(formattedTs)}</td><td>${escapeHtml(trip.date || "")}</td><td>${escapeHtml(trip.repName || "")}</td><td>${escapeHtml(trip.place || "")}</td><td>${escapeHtml(trip.client || "")}</td><td>${Number(trip.allowance || 0).toFixed(2)}</td>`;
       if (isAdmin()) {
         const cell = document.createElement("td");
         const button = document.createElement("button");
@@ -445,8 +475,8 @@
       const totalAllowance = rows.reduce((sum, trip) => sum + Number(trip.allowance || 0), 0);
       const aoa = [
         ["تقرير رحلات مناديب الدلتا - TAGADDOD", "", "", "", "", ""],
-        ["وقت التسجيل", "تاريخ الرحلة", "اسم المندوب", "المكان / المحافظة", "اسم العميل", "بدل السفر (ج.م)"],
-        ...rows.map((trip) => [trip.timestamp || "", trip.date || "", trip.repName || "", trip.place || "", trip.client || "", Number(trip.allowance || 0)])
+        ["الطابع الزمني", "تاريخ الرحلة", "اسم المندوب", "المكان / المحافظة", "اسم العميل", "بدل السفر (ج.م)"],
+        ...rows.map((trip) => [formatTimestamp(trip.timestamp), trip.date || "", trip.repName || "", trip.place || "", trip.client || "", Number(trip.allowance || 0)])
       ];
       const summaryTitleRow = aoa.length + 2;
       aoa.push([], ["ملخص بدل السفر حسب المندوب", "", ""]);
@@ -461,7 +491,7 @@
 
       const ws = XLSX.utils.aoa_to_sheet(aoa);
       ws["!views"] = [{ RTL: true }];
-      ws["!cols"] = [{ wch: 22 }, { wch: 15 }, { wch: 23 }, { wch: 23 }, { wch: 27 }, { wch: 19 }];
+      ws["!cols"] = [{ wch: 24 }, { wch: 15 }, { wch: 23 }, { wch: 23 }, { wch: 27 }, { wch: 19 }];
       ws["!rows"] = aoa.map((_, index) => ({ hpt: index === 0 || index + 1 === summaryTitleRow || index + 1 === summaryHeaderRow ? 26 : 22 }));
       ws["!merges"] = [
         { s: { r: 0, c: 0 }, e: { r: 0, c: 5 } },
@@ -469,25 +499,25 @@
       ];
 
       const border = {
-        top: { style: "thin", color: { rgb: "D5E2DC" } },
-        bottom: { style: "thin", color: { rgb: "D5E2DC" } },
-        left: { style: "thin", color: { rgb: "D5E2DC" } },
-        right: { style: "thin", color: { rgb: "D5E2DC" } }
+        top: { style: "thin", color: { rgb: "235861" } },
+        bottom: { style: "thin", color: { rgb: "235861" } },
+        left: { style: "thin", color: { rgb: "235861" } },
+        right: { style: "thin", color: { rgb: "235861" } }
       };
       const setStyle = (r, c, style) => {
         const cell = ws[XLSX.utils.encode_cell({ r, c })];
         if (cell) cell.s = { ...style, border, alignment: { vertical: "center", horizontal: "center", wrapText: true, ...(style.alignment || {}) } };
       };
-      const titleStyle = { font: { name: "Arial", sz: 15, bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "123B35" } } };
-      const headerStyle = { font: { name: "Arial", sz: 11, bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "1D6254" } } };
-      const totalStyle = { font: { name: "Arial", sz: 11, bold: true, color: { rgb: "123B35" } }, fill: { fgColor: { rgb: "E6F3ED" } } };
+      const titleStyle = { font: { name: "Arial", sz: 15, bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "0C2226" } } };
+      const headerStyle = { font: { name: "Arial", sz: 11, bold: true, color: { rgb: "5EEAD4" } }, fill: { fgColor: { rgb: "102C31" } } };
+      const totalStyle = { font: { name: "Arial", sz: 11, bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "14353B" } } };
       const bodyStyle = { font: { name: "Arial", sz: 10, color: { rgb: "172824" } }, fill: { fgColor: { rgb: "FFFFFF" } } };
       for (let c = 0; c < 6; c += 1) setStyle(0, c, titleStyle);
       for (let c = 0; c < 6; c += 1) setStyle(1, c, headerStyle);
       for (let r = 2; r < rows.length + 2; r += 1) {
         for (let c = 0; c < 6; c += 1) {
-          const style = { ...bodyStyle, fill: { fgColor: { rgb: r % 2 === 0 ? "F4F8F6" : "FFFFFF" } } };
-          if (c === 5) style.numFmt = '#,##0.00';
+          const style = { ...bodyStyle, fill: { fgColor: { rgb: r % 2 === 0 ? "F2F8F8" : "FFFFFF" } } };
+          if (c === 5) style.numFmt = "#,##0.00";
           setStyle(r, c, style);
         }
       }
@@ -496,14 +526,14 @@
       const summaryStart = summaryHeaderRow;
       for (let r = summaryStart; r < grandTotalRow - 1; r += 1) {
         for (let c = 0; c < 3; c += 1) {
-          const style = { ...bodyStyle, fill: { fgColor: { rgb: r % 2 === 0 ? "F4F8F6" : "FFFFFF" } } };
-          if (c === 2) style.numFmt = '#,##0.00';
+          const style = { ...bodyStyle, fill: { fgColor: { rgb: r % 2 === 0 ? "F2F8F8" : "FFFFFF" } } };
+          if (c === 2) style.numFmt = "#,##0.00";
           setStyle(r, c, style);
         }
       }
       for (let c = 0; c < 3; c += 1) {
         const style = { ...totalStyle };
-        if (c === 2) style.numFmt = '#,##0.00';
+        if (c === 2) style.numFmt = "#,##0.00";
         setStyle(grandTotalRow - 1, c, style);
       }
       ws["!autofilter"] = { ref: `A2:F${Math.max(2, rows.length + 2)}` };
@@ -549,7 +579,7 @@
       const allowance = Number($("tripAllowance").value);
       if (!date || !place || !client || !Number.isFinite(allowance) || allowance < 0) return showToast("راجع بيانات الرحلة والبدل قبل التسجيل.", "warning");
       const repPhone = isAdmin() ? $("tripRepSelect").value : state.user.phone;
-      const ok = await runMutation("add_trip", { date, place, client, allowance, repPhone }, "تم تسجيل رحلة جديدة بنجاح.", "جاري تسجيل الرحلة على النظام...");
+      const ok = await runMutation("add_trip", { date, place, client, allowance, repPhone, timestamp: formatTimestamp(new Date()) }, "تم تسجيل رحلة جديدة بنجاح.", "جاري تسجيل الرحلة على النظام...");
       if (ok) { $("tripPlace").value = ""; $("tripClient").value = ""; }
     });
     $("addRepForm").addEventListener("submit", async (event) => {

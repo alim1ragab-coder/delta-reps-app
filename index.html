@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#123b35">
+  <meta name="theme-color" content="#0c2226">
   <meta name="description" content="إدارة رحلات مناديب الدلتا وبدل السفر وتحليل عينات الزيت">
   <title>مناديب الدلتا | TAGADDOD</title>
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=20261123-lab-clean">
 </head>
 <body>
   <header class="topbar">
@@ -75,28 +75,76 @@
       </nav>
 
       <section id="analysisTab" class="tab-panel active">
-        <div class="panel">
-          <h2>تحليل عينة زيت</h2>
-          <form id="labAnalysisForm" class="form-grid lab-form-grid">
-            <label class="lab-client-field">اسم العميل<input id="labClientName" type="text" placeholder="اسم العميل" autocomplete="off"></label>
-            <label class="lab-acids-field">الأحماض (%)<input id="labAcids" type="number" min="0" step="0.01" value="0"></label>
-            <label>الوزن الفارغ<input id="labEmptyWeight" type="number" min="0" step="0.01" value="0"></label>
-            <label>الوزن قبل الغليان<input id="labBeforeBoil" type="number" min="0" step="0.01" value="0"></label>
-            <label>الوزن بعد الغليان<input id="labAfterBoil" type="number" min="0" step="0.01" value="0"></label>
-            <label>وزن الرواسب شامل الوعاء<input id="labSedimentWeight" type="number" min="0" step="0.01" value="0"></label>
+        <div class="panel lab-showcase-panel">
+          <h2 class="lab-showcase-title">تحليل عينة</h2>
+          <div class="lab-showcase-divider"></div>
+
+          <form id="labAnalysisForm" class="lab-meta-grid">
+            <label>اسم العميل
+              <input id="labClientName" type="text" placeholder="اسم العميل" autocomplete="off">
+            </label>
+            <label>الأحماض (%)
+              <input id="labAcids" type="number" inputmode="decimal" min="0" step="any" placeholder="0">
+            </label>
           </form>
-          <div class="analysis-results">
-            <div><span>نسبة المياه</span><b id="resWaterPct">0.00%</b></div>
-            <div><span>نسبة الرواسب</span><b id="resSedimentPct">0.00%</b></div>
-            <div><span>نسبة الأحماض</span><b id="resAcidPct">0.00%</b></div>
-            <div class="highlight"><span>الخصم بالطن (كجم/طن)</span><b id="resDeductionPerTon">0</b></div>
+
+          <!-- الصف الأول: 4 مربعات جنب بعض للأوزان -->
+          <div class="lab-group-box">
+            <div class="lab-weights-grid">
+              <label class="lab-box-card">
+                <span>وزن فارغ</span>
+                <input id="labEmptyWeight" type="number" inputmode="decimal" min="0" step="any" placeholder="0">
+              </label>
+              <label class="lab-box-card">
+                <span>قبل الغليان</span>
+                <input id="labBeforeBoil" type="number" inputmode="decimal" min="0" step="any" placeholder="0">
+              </label>
+              <label class="lab-box-card">
+                <span>بعد الغليان</span>
+                <input id="labAfterBoil" type="number" inputmode="decimal" min="0" step="any" placeholder="0">
+              </label>
+              <label class="lab-box-card">
+                <span>وزن الرواسب</span>
+                <input id="labSedimentWeight" type="number" inputmode="decimal" min="0" step="any" placeholder="0">
+              </label>
+            </div>
           </div>
-          <div class="actions-row">
+
+          <!-- الصف الثاني: 3 مربعات جنب بعض للنسب -->
+          <div class="lab-group-box">
+            <div class="analysis-results">
+              <div class="lab-metric-box">
+                <span>نسبة المياه</span>
+                <b id="resWaterPct">0.00%</b>
+              </div>
+              <div class="lab-metric-box">
+                <span>نسبة الرواسب</span>
+                <b id="resSedimentPct">0.00%</b>
+              </div>
+              <div class="lab-metric-box">
+                <span>نسبة الأحماض</span>
+                <b id="resAcidPct">0.00%</b>
+              </div>
+            </div>
+          </div>
+
+          <!-- الصف الثالث: الخصم بالطن في المنتصف -->
+          <div class="analysis-deduction-wrap">
+            <div class="analysis-deduction-box">
+              <span>الخصم بالطن (كجم/طن)</span>
+              <b id="resDeductionPerTon">0</b>
+            </div>
+          </div>
+
+          <div class="lab-card-footer">Designed &amp; Structured by ALI RAGAB - TAGADDOD</div>
+
+          <div class="actions-row lab-actions-center">
             <button id="saveLabAnalysisBtn" type="button" class="primary">حفظ التحليل</button>
             <button id="shareLabImageBtn" type="button" class="secondary">مشاركة صورة التحليل</button>
           </div>
-          <p class="muted">السماح للأحماض 3%، والسماح للمياه والرواسب معًا 2%. كل زيادة 1% تُحسب 10 كجم لكل طن.</p>
+          <p class="muted lab-note-center">السماح للأحماض 3%، والسماح للمياه والرواسب معًا 2%. كل زيادة 1% تُحسب 10 كجم لكل طن.</p>
         </div>
+
         <div class="panel">
           <h2>التحاليل المحفوظة على هذا الجهاز</h2>
           <div class="table-wrap"><table><thead><tr><th>العميل</th><th>الأحماض</th><th>المياه</th><th>الرواسب</th><th>خصم/طن</th><th>إجراء</th></tr></thead><tbody id="savedLabAnalysisBody"></tbody></table></div>
@@ -128,13 +176,13 @@
             <button id="exportExcelBtn" class="secondary" type="button">تصدير Excel</button>
           </div>
           <p id="recordsSummary" class="summary-text">سجل الرحلات</p>
-          <div class="table-wrap"><table><thead><tr><th>وقت التسجيل</th><th>التاريخ</th><th>المندوب</th><th>المكان</th><th>العميل</th><th>بدل السفر</th><th class="admin-only hidden">إجراء</th></tr></thead><tbody id="recordsBody"></tbody></table></div>
+          <div class="table-wrap"><table><thead><tr><th>الطابع الزمني</th><th>التاريخ</th><th>المندوب</th><th>المكان</th><th>العميل</th><th>بدل السفر</th><th class="admin-only hidden">إجراء</th></tr></thead><tbody id="recordsBody"></tbody></table></div>
           <div id="tripsPaginationBar" class="pagination">
             <button id="prevTripsPageBtn" class="secondary" type="button">السابق</button>
             <span id="tripsPageInfo">صفحة 1 من 1</span>
             <button id="nextTripsPageBtn" class="secondary" type="button">التالي</button>
           </div>
-          <p class="muted pagination-hint">كل الرحلات بتتسجل بدون حد أقصى. بنعرض 15 رحلة في الصفحة عشان التصفح يفضل سريع، وتقدر تتنقل بين الصفحات.</p>
+          <p class="muted pagination-hint">المندوب يرى رحلاته كاملة والمشرف يرى جميع الرحلات، مع عرض 15 رحلة في كل صفحة لخفة التصفح.</p>
         </div>
       </section>
 
