@@ -6,15 +6,48 @@
   <meta name="theme-color" content="#132a2e" />
   <title>مناديب الدلتا TAGADDOD - BY.ALI RAGAB</title>
   <link rel="manifest" href="manifest.json" />
-  <link rel="stylesheet" href="styles.css?v=20261122-ar2" />
-  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <link rel="stylesheet" href="styles.css?v=20261122-ar3" />
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" defer></script>
 </head>
 <body>
-  <div id="splashScreen" class="splash-screen">
-    <img src="splash-banner.png" alt="مناديب الدلتا TAGADDOD - BY.ALI RAGAB" class="splash-img" />
+  <div id="splashScreen" class="splash-screen" style="z-index: 99999; pointer-events: auto;">
+    <img src="splash-banner.png" alt="مناديب الدلتا TAGADDOD - BY.ALI RAGAB" class="splash-img" loading="eager" decoding="async" />
     <div class="splash-caption">مناديب الدلتا TAGADDOD • BY.ALI RAGAB</div>
-    <button type="button" id="skipSplashBtn" class="btn btn-outline">تخطي</button>
+    <button type="button" id="skipSplashBtn" class="btn btn-outline" style="position: relative; z-index: 100000; cursor: pointer;">تخطي</button>
   </div>
+  <script>
+    (function () {
+      var done = false;
+      function dismissSplashNow() {
+        if (done) return;
+        done = true;
+        var el = document.getElementById("splashScreen");
+        if (!el) return;
+        el.style.setProperty("opacity", "0", "important");
+        el.style.setProperty("pointer-events", "none", "important");
+        el.style.setProperty("visibility", "hidden", "important");
+        setTimeout(function () {
+          if (el) el.style.setProperty("display", "none", "important");
+        }, 150);
+      }
+
+      var btn = document.getElementById("skipSplashBtn");
+      if (btn) {
+        btn.addEventListener("click", function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          dismissSplashNow();
+        });
+        btn.addEventListener("touchstart", function (e) {
+          e.stopPropagation();
+          dismissSplashNow();
+        }, { passive: true });
+      }
+
+      setTimeout(dismissSplashNow, 650);
+      window.__dismissSplashNow = dismissSplashNow;
+    })();
+  </script>
 
   <header class="app-header topbar">
     <div class="brand-box">
@@ -121,7 +154,7 @@
       <nav class="tabs-bar">
         <button type="button" class="tab-btn active" data-tab="analysisTab">تحاليل العملاء</button>
         <button type="button" class="tab-btn" data-tab="newTripTab">تسجيل رحلة</button>
-        <button type="button" class="tab-btn" data-tab="recordsTab">سجل الرحلات (حد أقصى 10)</button>
+        <button type="button" class="tab-btn" data-tab="recordsTab">سجل الرحلات وبدل السفر</button>
         <button type="button" class="tab-btn admin-only hidden" data-tab="adminTab">إدارة المناديب والبدلات</button>
       </nav>
 
@@ -246,10 +279,10 @@
         </form>
       </div>
 
-      <!-- تبويب سجل الرحلات (حد أقصى 10 أسطر + إمكانية الحذف) -->
+      <!-- تبويب سجل الرحلات -->
       <div id="recordsTab" class="tab-panel card">
         <div class="section-header">
-          <h2>سجل الرحلات وبدل السفر (حد أقصى 10 رحلات)</h2>
+          <h2>سجل الرحلات وبدل السفر</h2>
           <button id="exportExcelBtn" type="button" class="btn btn-success admin-only hidden">تصدير Excel (.xlsx)</button>
         </div>
 
@@ -322,26 +355,7 @@
     Designed &amp; Structured by ALI RAGAB - TAGADDOD
   </footer>
 
-  <script src="analysis.js"></script>
-  <script src="app.js"></script>
-  <script>
-    (function () {
-      function forceHideSplash() {
-        var s = document.getElementById("splashScreen");
-        if (!s) return;
-        s.style.opacity = "0";
-        s.style.pointerEvents = "none";
-        setTimeout(function () {
-          if (s && s.parentNode) s.style.display = "none";
-        }, 250);
-      }
-      var skip = document.getElementById("skipSplashBtn");
-      if (skip) skip.addEventListener("click", forceHideSplash);
-      setTimeout(forceHideSplash, 1400);
-      window.addEventListener("load", function () {
-        setTimeout(forceHideSplash, 400);
-      });
-    })();
-  </script>
+  <script src="analysis.js" defer></script>
+  <script src="app.js" defer></script>
 </body>
 </html>
