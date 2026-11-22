@@ -5,7 +5,8 @@ const KEYS = {
   allowance: "delta_default_allowance_v4"
 };
 
-const MAX_TRIP_ROWS = 10;
+const TRIPS_PAGE_SIZE = 15;
+let currentTripsPage = 1;
 
 const SHEET_SYNC_URL = "https://script.google.com/macros/s/AKfycbzS2D9ENbdxUVwDoe-FkdtLl2paeSSxn3Lhm3M2hVz0J1fPnjm6-NiQgdOYUXBZRJ7u/exec";
 
@@ -174,15 +175,15 @@ function setAllowance(val) {
 function getTrips() {
   try {
     const parsed = JSON.parse(localStorage.getItem(KEYS.trips) || "[]");
-    return Array.isArray(parsed) ? parsed.slice(0, MAX_TRIP_ROWS) : [];
+    return Array.isArray(parsed) ? parsed : [];
   } catch (_) {
     return [];
   }
 }
 
 function setTrips(list) {
-  const capped = (Array.isArray(list) ? list : []).slice(0, MAX_TRIP_ROWS);
-  localStorage.setItem(KEYS.trips, JSON.stringify(capped));
+  const all = Array.isArray(list) ? list : [];
+  localStorage.setItem(KEYS.trips, JSON.stringify(all));
 }
 
 function deleteTripById(tripId) {
@@ -212,13 +213,11 @@ function mergeTripsData(localTrips, remoteTrips) {
       });
     }
   });
-  return Array.from(map.values())
-    .sort((a, b) => {
-      const idA = Number(String(a.id || "").replace(/\D/g, "")) || 0;
-      const idB = Number(String(b.id || "").replace(/\D/g, "")) || 0;
-      return idB - idA;
-    })
-    .slice(0, MAX_TRIP_ROWS);
+  return Array.from(map.values()).sort((a, b) => {
+    const idA = Number(String(a.id || "").replace(/\D/g, "")) || 0;
+    const idB = Number(String(b.id || "").replace(/\D/g, "")) || 0;
+    return idB - idA;
+  });
 }
 
 function mergeAccountsData(localAccounts, remoteAccounts) {
@@ -250,7 +249,7 @@ function mergeAccountsData(localAccounts, remoteAccounts) {
       phone: cleanPhone || (prev && prev.phone) || "",
       role: resolvedRole,
       password: remotePass || localPass || "",
-      avatar: (acc && acc.avatar) || (prev && prev.avatar) || ""
+      avatar: (acc && acc.avatar) || (prev && acc.avatar) || ""
     });
   });
 
@@ -606,22 +605,21 @@ function renderRepsList() {
   });
 }
 
-function getVisibleTripsForUser(user) {
+// المشرف يرى جميع الرحلات، والمندوب يرى رحلاته كاملة
+function getAllUserTrips(user) {
   const allTrips = getTrips();
-  if (!user) return allTrips.slice(0, MAX_TRIP_ROWS);
+  if (!user) return [];
   if (isAccountAdmin(user)) {
-    return allTrips.slice(0, MAX_TRIP_ROWS);
+    return allTrips;
   }
   const userPhone = normalizePhone(user.phone);
   const userName = (user.name || "").trim();
 
-  return allTrips
-    .filter((t) => {
-      const samePhone = t.ownerPhone && normalizePhone(t.ownerPhone) === userPhone;
-      const sameName = userName && (t.repName || "").trim() === userName;
-      return samePhone || sameName;
-    })
-    .slice(0, MAX_TRIP_ROWS);
+  return allTrips.filter((t) => {
+    const samePhone = t.ownerPhone && normalizePhone(t.ownerPhone) === userPhone;
+    const sameName = userName && (t.repName || "").trim() === userName;
+    return samePhone || sameName;
+  });
 }
 
 function getFilteredTrips() {
@@ -630,28 +628,76 @@ function getFilteredTrips() {
   const to = document.getElementById("toDate")?.value || "";
   const searchQuery = (document.getElementById("tripSearchInput")?.value || "").trim().toLowerCase();
 
-  return getVisibleTripsForUser(user)
-    .filter((t) => {
-      if (from && t.date < from) return false;
-      if (to && t.date > to) return false;
-      if (searchQuery) {
-        const hay = `${t.repName || ""} ${t.client || ""} ${t.place || ""}`.toLowerCase();
-        if (!hay.includes(searchQuery)) return false;
-      }
-      return true;
-    })
-    .slice(0, MAX_TRIP_ROWS);
+  return getAllUserTrips(user).filter((t) => {
+    if (from && t.date < from) return false;
+    if (to && t.date > to) return false;
+    if (searchQuery) {
+      const hay = `${t.repName || ""} ${t.client || ""} ${t.place || ""}`.toLowerCase();
+      if (!hay.includes(searchQuery)) return false;
+    }
+    return true;
+  });
+}
+
+function ensureTripsPaginationBar() {
+  const recordsTab = document.getElementById("recordsTab");
+  if (!recordsTab || document.getElementById("tripsPaginationBar")) return;
+
+  const bar = document.createElement("div");
+  bar.id = "tripsPaginationBar";
+  bar.className = "actions-row";
+  bar.style.marginTop = "12px";
+  bar.style.justifyContent = "center";
+  bar.style.alignItems = "center";
+  bar.innerHTML = `
+    <button type="button" id="prevTripsPageBtn" class="btn btn-outline">السابق</button>
+    <span id="tripsPageInfo" class="summary-text" style="margin: 0 10px;"></span>
+    <button type="button" id="nextTripsPageBtn" class="btn btn-outline">التالي</button>
+  `;
+
+  const tableWrap = recordsTab.querySelector(".table-wrap");
+  if (tableWrap) {
+    tableWrap.insertAdjacentElement("afterend", bar);
+  } else {
+    recordsTab.appendChild(bar);
+  }
+
+  document.getElementById("prevTripsPageBtn")?.addEventListener("click", () => {
+    if (currentTripsPage > 1) {
+      currentTripsPage -= 1;
+      renderTripsTable();
+    }
+  });
+
+  document.getElementById("nextTripsPageBtn")?.addEventListener("click", () => {
+    const totalPages = Math.max(1, Math.ceil(getFilteredTrips().length / TRIPS_PAGE_SIZE));
+    if (currentTripsPage < totalPages) {
+      currentTripsPage += 1;
+      renderTripsTable();
+    }
+  });
 }
 
 function renderTripsTable() {
-  const rows = getFilteredTrips();
+  ensureTripsPaginationBar();
+  const matched = getFilteredTrips();
+  const totalPages = Math.max(1, Math.ceil(matched.length / TRIPS_PAGE_SIZE));
+  if (currentTripsPage > totalPages) currentTripsPage = totalPages;
+  if (currentTripsPage < 1) currentTripsPage = 1;
+
+  const startIdx = (currentTripsPage - 1) * TRIPS_PAGE_SIZE;
+  const pageRows = matched.slice(startIdx, startIdx + TRIPS_PAGE_SIZE);
+
   const tbody = document.getElementById("recordsBody");
   if (!tbody) return;
   tbody.innerHTML = "";
 
-  let totalAllowance = 0;
-  rows.forEach((t) => {
-    totalAllowance += parseFloat(t.allowance) || 0;
+  let totalAllowanceAll = 0;
+  matched.forEach((t) => {
+    totalAllowanceAll += parseFloat(t.allowance) || 0;
+  });
+
+  pageRows.forEach((t) => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${escapeHtml(t.timestamp)}</td>
@@ -672,8 +718,22 @@ function renderTripsTable() {
   const summaryEl = document.getElementById("recordsSummary");
   if (summaryEl) {
     summaryEl.textContent =
-      `عدد الرحلات: ${rows.length} / ${MAX_TRIP_ROWS} | إجمالي بدل السفر: ${totalAllowance.toFixed(2)} جنيه`;
+      `إجمالي الرحلات: ${matched.length} | إجمالي بدل السفر: ${totalAllowanceAll.toFixed(2)} جنيه`;
   }
+
+  const pageInfoEl = document.getElementById("tripsPageInfo");
+  const prevBtn = document.getElementById("prevTripsPageBtn");
+  const nextBtn = document.getElementById("nextTripsPageBtn");
+  const paginationBar = document.getElementById("tripsPaginationBar");
+
+  if (paginationBar) {
+    paginationBar.classList.toggle("hidden", matched.length <= TRIPS_PAGE_SIZE);
+  }
+  if (pageInfoEl) {
+    pageInfoEl.textContent = `صفحة ${currentTripsPage} من ${totalPages}`;
+  }
+  if (prevBtn) prevBtn.disabled = currentTripsPage <= 1;
+  if (nextBtn) nextBtn.disabled = currentTripsPage >= totalPages;
 }
 
 function escapeHtml(val) {
@@ -860,6 +920,7 @@ function switchTab(tabId) {
     renderSavedLabAnalyses();
   }
   if (tabId === "recordsTab") {
+    currentTripsPage = 1;
     renderTripsTable();
     pullFromSheetBackground(2500);
   }
@@ -1023,8 +1084,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const trips = getTrips();
       trips.unshift(newTrip);
-      setTrips(trips.slice(0, MAX_TRIP_ROWS));
+      setTrips(trips);
 
+      currentTripsPage = 1;
       document.getElementById("tripPlace").value = "";
       document.getElementById("tripClient").value = "";
       renderTripsTable();
@@ -1082,9 +1144,18 @@ document.addEventListener("DOMContentLoaded", () => {
       alert("تم حفظ قيمة بدل السفر الافتراضية.");
     });
 
-    document.getElementById("fromDate")?.addEventListener("change", renderTripsTable);
-    document.getElementById("toDate")?.addEventListener("change", renderTripsTable);
-    document.getElementById("tripSearchInput")?.addEventListener("input", renderTripsTable);
+    document.getElementById("fromDate")?.addEventListener("change", () => {
+      currentTripsPage = 1;
+      renderTripsTable();
+    });
+    document.getElementById("toDate")?.addEventListener("change", () => {
+      currentTripsPage = 1;
+      renderTripsTable();
+    });
+    document.getElementById("tripSearchInput")?.addEventListener("input", () => {
+      currentTripsPage = 1;
+      renderTripsTable();
+    });
     document.getElementById("exportExcelBtn")?.addEventListener("click", exportTripsToExcel);
 
     showSamplesView();
