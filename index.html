@@ -6,7 +6,8 @@
   <meta name="theme-color" content="#1e293b" />
   <title>مناديب الدلتا TAGADDOD - BY.ALI RAGAB</title>
   <link rel="manifest" href="manifest.json" />
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.css?v=20261122-xlsx" />
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 </head>
 <body>
   <div id="splashScreen" class="splash-screen">
@@ -134,7 +135,7 @@
             <input type="text" id="tripClient" placeholder="اسم العميل أو المخزن" required />
           </div>
 
-          <div class="field">
+          <div class="field full-width">
             <label for="tripAllowance">بدل السفر (جنيه)</label>
             <input type="number" step="0.01" id="tripAllowance" required />
           </div>
@@ -149,7 +150,7 @@
       <div id="recordsTab" class="tab-panel card">
         <div class="section-header">
           <h2>سجل الرحلات وبدل السفر</h2>
-          <button id="exportExcelBtn" type="button" class="btn btn-success admin-only">تصدير Excel (.xls)</button>
+          <button id="exportExcelBtn" type="button" class="btn btn-success admin-only">تصدير Excel (.xlsx)</button>
         </div>
 
         <div class="filters-row">
@@ -187,7 +188,7 @@
         <h2>تحاليل العملاء (يعمل بدون إنترنت)</h2>
 
         <div class="lab-grid">
-          <div class="field lab-full-row">
+          <div class="field">
             <label for="labClientName">اسم العميل</label>
             <input type="text" id="labClientName" placeholder="اسم العميل" />
           </div>
@@ -220,11 +221,6 @@
 
         <div class="lab-results-row">
           <div class="lab-metric-card">
-            <div class="lab-metric-label">نسبة الأحماض</div>
-            <div id="resAcidPct" class="lab-metric-value">0.00%</div>
-          </div>
-
-          <div class="lab-metric-card">
             <div class="lab-metric-label">نسبة المياه</div>
             <div id="resWaterPct" class="lab-metric-value">0.00%</div>
           </div>
@@ -232,6 +228,11 @@
           <div class="lab-metric-card">
             <div class="lab-metric-label">نسبة الرواسب</div>
             <div id="resSedimentPct" class="lab-metric-value">0.00%</div>
+          </div>
+
+          <div class="lab-metric-card">
+            <div class="lab-metric-label">نسبة الأحماض</div>
+            <div id="resAcidPct" class="lab-metric-value">0.00%</div>
           </div>
         </div>
 
