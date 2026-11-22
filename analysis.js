@@ -4,14 +4,14 @@ function numVal(id) {
   const el = document.getElementById(id);
   if (!el) return 0;
   const v = parseFloat(el.value);
-  return Number.isFinite(v) ? v : 0;
+  return Number.isFinite(v) ? Math.max(0, v) : 0;
 }
 
 function fmtInputNum_(id) {
   const el = document.getElementById(id);
   if (!el || el.value === "") return "0";
   const v = parseFloat(el.value);
-  return Number.isFinite(v) ? String(v) : "0";
+  return Number.isFinite(v) ? String(Math.max(0, v)) : "0";
 }
 
 function computeLabMetrics() {
@@ -29,12 +29,12 @@ function computeLabMetrics() {
   let waterPct = 0;
   if (netBeforeBoil > 0 && beforeBoil > 0 && afterBoil > 0) {
     const lostWater = Math.max(0, beforeBoil - afterBoil);
-    waterPct = (lostWater / netBeforeBoil) * 100;
+    waterPct = Math.min(100, (lostWater / netBeforeBoil) * 100);
   }
 
   let sedimentPct = 0;
   if (netBeforeBoil > 0 && netSediment > 0) {
-    sedimentPct = (netSediment / netBeforeBoil) * 100;
+    sedimentPct = Math.min(100, (netSediment / netBeforeBoil) * 100);
   }
 
   // 1. خصم الأحماض: السماح 3%، والزيادة تتضرب في 10 كجم لكل 1%
@@ -89,6 +89,7 @@ function deleteSavedLabAnalysis(id) {
   const filtered = getSavedLabAnalyses().filter((item) => item.id !== id);
   setSavedLabAnalyses(filtered);
   renderSavedLabAnalyses();
+  if (typeof window.showAppToast === "function") window.showAppToast("تم حذف التحليل.", "success");
 }
 
 function renderSavedLabAnalyses() {
@@ -130,7 +131,8 @@ function saveCurrentLabAnalysis() {
   const metrics = computeLabMetrics();
 
   if (!client) {
-    alert("من فضلك أدخل اسم العميل أولاً.");
+    if (typeof window.showAppToast === "function") window.showAppToast("اكتب اسم العميل الأول.", "warning");
+    else alert("من فضلك أدخل اسم العميل أولاً.");
     return;
   }
 
@@ -147,7 +149,8 @@ function saveCurrentLabAnalysis() {
   list.unshift(entry);
   setSavedLabAnalyses(list);
   renderSavedLabAnalyses();
-  alert("تم حفظ التحليل محلياً على الجهاز.");
+  if (typeof window.showAppToast === "function") window.showAppToast("تم حفظ التحليل على الجهاز بنجاح.", "success");
+  else alert("تم حفظ التحليل محلياً على الجهاز.");
 }
 
 function getCurrentLabSummaryData() {
@@ -348,6 +351,7 @@ async function shareLabAnalysisAsImage() {
         files: [file],
         title: `تحليل ${data.clientName}`
       });
+      if (typeof window.showAppToast === "function") window.showAppToast("تم تجهيز ومشاركة صورة التحليل.", "success");
       return;
     } catch (err) {
       if (err && err.name === "AbortError") return;
@@ -362,7 +366,8 @@ async function shareLabAnalysisAsImage() {
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
-  alert("تم حفظ صورة التحليل على جهازك لمشاركتها.");
+  if (typeof window.showAppToast === "function") window.showAppToast("تم تجهيز صورة التحليل وحفظها بنجاح.", "success");
+  else alert("تم حفظ صورة التحليل على جهازك لمشاركتها.");
 }
 
 function initLabAnalysisModule() {

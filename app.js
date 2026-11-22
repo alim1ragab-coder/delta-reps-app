@@ -1,1147 +1,619 @@
-const KEYS = {
-  session: "delta_session_v4",
-  accounts: "delta_accounts_v4",
-  trips: "delta_trips_records_v4",
-  allowance: "delta_default_allowance_v4"
-};
-
-const TRIPS_PAGE_SIZE = 15;
-let currentTripsPage = 1;
-
-const SHEET_SYNC_URL = "https://script.google.com/macros/s/AKfycbzS2D9ENbdxUVwDoe-FkdtLl2paeSSxn3Lhm3M2hVz0J1fPnjm6-NiQgdOYUXBZRJ7u/exec";
-
-// ضع رقم تليفونك (ورقم أي مشرف أساسي آخر) هنا بالأرقام فقط
-const ADMIN_PHONES = [
-  "01276341407"
-];
-
-const DEFAULT_REPS = [
-  { id: "rep_1", name: "رضا ماضي", phone: "01011111111", role: "rep", password: "", avatar: "" },
-  { id: "rep_2", name: "محمد حاتم", phone: "01022222222", role: "rep", password: "", avatar: "" },
-  { id: "rep_3", name: "محمد السيد", phone: "01033333333", role: "rep", password: "", avatar: "" }
-];
-
-let isAuthSubmitting = false;
-
-function normalizePhone(phone) {
-  return (phone || "").toString().replace(/\D/g, "").trim();
-}
-
-function isConfiguredAdminPhone(phone) {
-  const clean = normalizePhone(phone);
-  return ADMIN_PHONES.map(normalizePhone).includes(clean);
-}
-
-function isAccountAdmin(account) {
-  if (!account) return false;
-  return account.role === "admin" || isConfiguredAdminPhone(account.phone);
-}
-
-function updateConnectionStatusBadge() {
-  const badge = document.getElementById("connectionStatusBadge");
-  if (!badge) return;
-  const online = navigator.onLine;
-  badge.textContent = online ? "متصل بالشبكة" : "النت فاصل";
-  badge.classList.toggle("status-online", online);
-  badge.classList.toggle("status-offline", !online);
-}
-
-function initPasswordToggles() {
-  document.querySelectorAll(".password-toggle-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const targetId = btn.dataset.target;
-      const input = document.getElementById(targetId);
-      if (!input) return;
-      const isHidden = input.type === "password";
-      input.type = isHidden ? "text" : "password";
-      btn.textContent = isHidden ? "إخفاء" : "إظهار";
-    });
-  });
-}
-
-function getAccounts() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(KEYS.accounts) || "null");
-    if (Array.isArray(saved) && saved.length > 0) {
-      return saved.map((acc) => ({
-        ...acc,
-        phone: normalizePhone(acc.phone),
-        role: isConfiguredAdminPhone(acc.phone) ? "admin" : (acc.role === "admin" ? "admin" : "rep"),
-        password: String(acc.password ?? ""),
-        avatar: acc.avatar || ""
-      }));
-    }
-  } catch (_) {}
-
-  const initialAdmins = ADMIN_PHONES.map((p, idx) => ({
-    id: `admin_${idx + 1}`,
-    name: idx === 0 ? "علي رجب" : `مشرف ${idx + 1}`,
-    phone: normalizePhone(p),
-    role: "admin",
-    password: "",
-    avatar: ""
-  }));
-
-  const all = [...initialAdmins, ...DEFAULT_REPS];
-  localStorage.setItem(KEYS.accounts, JSON.stringify(all));
-  return all;
-}
-
-function setAccounts(list) {
-  const normalized = (Array.isArray(list) ? list : []).map((acc) => ({
-    ...acc,
-    phone: normalizePhone(acc.phone),
-    role: isConfiguredAdminPhone(acc.phone) ? "admin" : (acc.role === "admin" ? "admin" : "rep"),
-    password: String(acc.password ?? ""),
-    avatar: acc.avatar || ""
-  }));
-  localStorage.setItem(KEYS.accounts, JSON.stringify(normalized));
-}
-
-function findAccountByPhone(phone) {
-  const clean = normalizePhone(phone);
-  return getAccounts().find((acc) => normalizePhone(acc.phone) === clean) || null;
-}
-
-function ensureAdminOrApprovedAccount(phone) {
-  const clean = normalizePhone(phone);
-  const isAdminPhone = isConfiguredAdminPhone(clean);
-  let account = findAccountByPhone(clean);
-
-  if (!account && isAdminPhone) {
-    account = {
-      id: `admin_${Date.now()}`,
-      name: "علي رجب",
-      phone: clean,
-      role: "admin",
-      password: "",
-      avatar: ""
-    };
-    const list = getAccounts();
-    list.unshift(account);
-    setAccounts(list);
-  } else if (account && isAdminPhone && account.role !== "admin") {
-    account = updateAccount(account.id, { role: "admin" });
-  }
-
-  return account;
-}
-
-function updateAccount(accountId, patch) {
-  const updated = getAccounts().map((acc) => {
-    if (acc.id !== accountId) return acc;
-    const merged = { ...acc, ...patch };
-    const cleanPhone = normalizePhone(merged.phone);
-    return {
-      ...merged,
-      phone: cleanPhone,
-      role: isConfiguredAdminPhone(cleanPhone) ? "admin" : (merged.role === "admin" ? "admin" : "rep"),
-      password: merged.password !== undefined ? String(merged.password ?? "") : String(acc.password ?? "")
-    };
-  });
-  setAccounts(updated);
-  return updated.find((acc) => acc.id === accountId) || null;
-}
-
-function getSessionPhone() {
-  return localStorage.getItem(KEYS.session) || "";
-}
-
-function getCurrentUser() {
-  const phone = getSessionPhone();
-  if (!phone) return null;
-  return ensureAdminOrApprovedAccount(phone);
-}
-
-function readImageAsDataUrl(fileInput) {
-  return new Promise((resolve) => {
-    const file = fileInput && fileInput.files && fileInput.files[0];
-    if (!file) return resolve("");
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => resolve("");
-    reader.readAsDataURL(file);
-  });
-}
-
-function getAllowance() {
-  return parseFloat(localStorage.getItem(KEYS.allowance) || "150") || 150;
-}
-
-function setAllowance(val) {
-  localStorage.setItem(KEYS.allowance, String(parseFloat(val) || 0));
-}
-
-function getTrips() {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(KEYS.trips) || "[]");
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (_) {
-    return [];
-  }
-}
-
-function setTrips(list) {
-  const all = Array.isArray(list) ? list : [];
-  localStorage.setItem(KEYS.trips, JSON.stringify(all));
-}
-
-function deleteTripById(tripId) {
-  const remaining = getTrips().filter((t) => String(t.id) !== String(tripId));
-  setTrips(remaining);
-  renderTripsTable();
-  pushToSheetBackground();
-}
-
-function mergeTripsData(localTrips, remoteTrips) {
-  const map = new Map();
-  (Array.isArray(remoteTrips) ? remoteTrips : []).forEach((t) => {
-    if (t && t.id) {
-      map.set(String(t.id), {
-        ...t,
-        ownerPhone: normalizePhone(t.ownerPhone),
-        allowance: parseFloat(t.allowance) || 0
-      });
-    }
-  });
-  (Array.isArray(localTrips) ? localTrips : []).forEach((t) => {
-    if (t && t.id && !map.has(String(t.id))) {
-      map.set(String(t.id), {
-        ...t,
-        ownerPhone: normalizePhone(t.ownerPhone),
-        allowance: parseFloat(t.allowance) || 0
-      });
-    }
-  });
-  return Array.from(map.values()).sort((a, b) => {
-    const idA = Number(String(a.id || "").replace(/\D/g, "")) || 0;
-    const idB = Number(String(b.id || "").replace(/\D/g, "")) || 0;
-    return idB - idA;
-  });
-}
-
-function mergeAccountsData(localAccounts, remoteAccounts) {
-  const localList = Array.isArray(localAccounts) ? localAccounts : [];
-  const remoteList = Array.isArray(remoteAccounts) ? remoteAccounts : [];
-  if (remoteList.length === 0) return localList;
-
-  const map = new Map();
-  localList.forEach((acc) => {
-    map.set(normalizePhone(acc.phone) || String(acc.id), acc);
-  });
-
-  remoteList.forEach((acc) => {
-    const cleanPhone = normalizePhone(acc.phone);
-    const key = cleanPhone || String(acc.id);
-    const prev = map.get(key);
-    const resolvedRole = isConfiguredAdminPhone(cleanPhone)
-      ? "admin"
-      : (acc && acc.role === "admin") || (prev && prev.role === "admin")
-        ? "admin"
-        : "rep";
-
-    const remotePass = acc && acc.password !== undefined && acc.password !== null ? String(acc.password) : "";
-    const localPass = prev && prev.password !== undefined && prev.password !== null ? String(prev.password) : "";
-
-    map.set(key, {
-      ...(prev || {}),
-      ...acc,
-      phone: cleanPhone || (prev && prev.phone) || "",
-      role: resolvedRole,
-      password: remotePass || localPass || "",
-      avatar: (acc && acc.avatar) || (prev && prev.avatar) || ""
-    });
-  });
-
-  return Array.from(map.values());
-}
-
-function pushToSheetBackground() {
-  if (!SHEET_SYNC_URL || !navigator.onLine) return;
-  try {
-    const payload = {
-      action: "sync_all",
-      data: {
-        trips: getTrips(),
-        accounts: getAccounts().map((acc) => ({
-          id: acc.id,
-          name: acc.name,
-          phone: normalizePhone(acc.phone),
-          role: isAccountAdmin(acc) ? "admin" : "rep",
-          password: String(acc.password ?? ""),
-          avatar: acc.avatar || ""
-        })),
-        allowance: getAllowance()
-      }
-    };
-
-    fetch(SHEET_SYNC_URL, {
-      method: "POST",
-      mode: "no-cors",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify(payload)
-    }).catch(() => {});
-  } catch (_) {}
-}
-
-async function pullFromSheetBackground(timeoutMs = 2200) {
-  if (!SHEET_SYNC_URL || !navigator.onLine) return false;
-  const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
-  const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
-
-  try {
-    const res = await fetch(SHEET_SYNC_URL, {
-      method: "GET",
-      cache: "no-store",
-      signal: controller ? controller.signal : undefined
-    });
-    if (timer) clearTimeout(timer);
-    if (!res.ok) return false;
-    const json = await res.json();
-    if (!json || !json.ok || !json.data) return false;
-
-    setTrips(mergeTripsData(getTrips(), json.data.trips));
-    setAccounts(mergeAccountsData(getAccounts(), json.data.accounts));
-    if (typeof json.data.allowance === "number" && !Number.isNaN(json.data.allowance)) {
-      localStorage.setItem(KEYS.allowance, String(json.data.allowance));
-    }
-
-    const user = getCurrentUser();
-    if (user) {
-      const adminFlag = isAccountAdmin(user);
-      refreshRepSelect(user, adminFlag);
-      const allowanceInput = document.getElementById("tripAllowance");
-      const defaultAllowanceInput = document.getElementById("defaultAllowanceInput");
-      if (allowanceInput) allowanceInput.value = getAllowance().toFixed(2);
-      if (defaultAllowanceInput) defaultAllowanceInput.value = getAllowance();
-      renderRepsList();
-      renderTripsTable();
-    }
-    return true;
-  } catch (_) {
-    if (timer) clearTimeout(timer);
-    return false;
-  }
-}
-
-function isFirstTimeUserPhone(phone) {
-  const clean = normalizePhone(phone);
-  if (!clean) return false;
-  const acc = ensureAdminOrApprovedAccount(clean);
-  return Boolean(acc && !acc.password);
-}
-
-function syncAuthFieldsForPhone() {
-  const phone = normalizePhone(document.getElementById("loginPhoneInput")?.value);
-  const existingBox = document.getElementById("existingPasswordBox");
-  const setupBox = document.getElementById("firstTimeSetupBox");
-  const titleEl = document.getElementById("authTitle");
-  const hintEl = document.getElementById("authHint");
-  const submitBtn = document.getElementById("phoneAuthBtn");
-
-  if (!existingBox || !setupBox || !submitBtn) return;
-
-  if (!phone) {
-    existingBox.classList.remove("hidden");
-    setupBox.classList.add("hidden");
-    if (titleEl) titleEl.textContent = "تسجيل الدخول";
-    if (hintEl) hintEl.textContent = "أدخل رقم تليفونك للمتابعة؛ إذا كان دخولك الأول سيظهر لك تعيين كلمة سر جديدة.";
-    submitBtn.textContent = "تسجيل الدخول";
-    return;
-  }
-
-  if (isFirstTimeUserPhone(phone)) {
-    existingBox.classList.add("hidden");
-    setupBox.classList.remove("hidden");
-    if (titleEl) titleEl.textContent = "تعيين كلمة سر لأول مرة";
-    if (hintEl) hintEl.textContent = "هذا أول دخول لهذا الرقم؛ قم بتعيين كلمة سر جديدة لحسابك.";
-    submitBtn.textContent = "حفظ كلمة السر والدخول";
-  } else {
-    existingBox.classList.remove("hidden");
-    setupBox.classList.add("hidden");
-    if (titleEl) titleEl.textContent = "تسجيل الدخول";
-    if (hintEl) hintEl.textContent = "أدخل كلمة السر المسجلة لحسابك.";
-    submitBtn.textContent = "تسجيل الدخول";
-  }
-}
-
-async function handlePhoneAuthSubmit() {
-  if (isAuthSubmitting) return;
-  const submitBtn = document.getElementById("phoneAuthBtn");
-  const phone = normalizePhone(document.getElementById("loginPhoneInput")?.value);
-
-  if (!phone) {
-    alert("من فضلك أدخل رقم التليفون.");
-    return;
-  }
-
-  isAuthSubmitting = true;
-  if (submitBtn) submitBtn.disabled = true;
-
-  try {
-    if (navigator.onLine) {
-      await pullFromSheetBackground(1800);
-    }
-    const account = ensureAdminOrApprovedAccount(phone);
-
-    if (!account) {
-      alert("هذا الرقم غير مسجل في قائمة المناديب أو المشرفين. تواصل مع المشرف لإضافتك.");
-      return;
-    }
-
-    if (!account.password) {
-      syncAuthFieldsForPhone();
-      const newPass = document.getElementById("setupPasswordInput")?.value || "";
-      const confirmPass = document.getElementById("confirmPasswordInput")?.value || "";
-
-      if (newPass.length < 4) {
-        alert("من فضلك اكتب كلمة سر جديدة من 4 خانات أو أكثر.");
-        return;
-      }
-      if (newPass !== confirmPass) {
-        alert("كلمة السر وتأكيدها غير متطابقين.");
-        return;
-      }
-
-      const updatedAcc = updateAccount(account.id, { password: newPass });
-      localStorage.setItem(KEYS.session, updatedAcc.phone);
-      document.getElementById("setupPasswordInput").value = "";
-      document.getElementById("confirmPasswordInput").value = "";
-      applyRoleUI(updatedAcc);
-      pushToSheetBackground();
-      return;
-    }
-
-    const enteredPass = document.getElementById("loginPasswordInput")?.value || "";
-    if (!enteredPass) {
-      alert("من فضلك أدخل كلمة السر.");
-      return;
-    }
-    if (enteredPass !== account.password) {
-      alert("كلمة السر غير صحيحة.");
-      return;
-    }
-
-    localStorage.setItem(KEYS.session, account.phone);
-    document.getElementById("loginPasswordInput").value = "";
-    applyRoleUI(account);
-    pullFromSheetBackground(2000);
-  } finally {
-    isAuthSubmitting = false;
-    if (submitBtn) submitBtn.disabled = false;
-  }
-}
-
-function setActiveView(viewName) {
-  const authSec = document.getElementById("authSection");
-  const profileSec = document.getElementById("profileModalSection");
-  const appSec = document.getElementById("appSection");
-  const loginBtn = document.getElementById("openLoginFromSamplesBtn");
-  const backBtn = document.getElementById("backToSamplesBtn");
-  const hasUser = Boolean(getCurrentUser());
-
-  if (viewName === "auth") {
-    authSec?.classList.remove("hidden");
-    profileSec?.classList.add("hidden");
-    appSec?.classList.add("hidden");
-    loginBtn?.classList.add("hidden");
-    backBtn?.classList.remove("hidden");
-    syncAuthFieldsForPhone();
-    return;
-  }
-
-  if (viewName === "profile") {
-    authSec?.classList.add("hidden");
-    profileSec?.classList.remove("hidden");
-    appSec?.classList.add("hidden");
-    loginBtn?.classList.add("hidden");
-    backBtn?.classList.add("hidden");
-    return;
-  }
-
-  authSec?.classList.add("hidden");
-  profileSec?.classList.add("hidden");
-  appSec?.classList.remove("hidden");
-  backBtn?.classList.add("hidden");
-  if (!hasUser) {
-    loginBtn?.classList.remove("hidden");
-  } else {
-    loginBtn?.classList.add("hidden");
-  }
-}
-
-function applyRoleUI(user) {
-  const isAdmin = isAccountAdmin(user);
-  setActiveView("app");
-  document.getElementById("logoutBtn")?.classList.remove("hidden");
-  document.getElementById("openChangePassBtn")?.classList.remove("hidden");
-
-  document.querySelectorAll(".admin-only").forEach((el) => {
-    el.classList.toggle("hidden", !isAdmin);
-  });
-
-  const avatarEl = document.getElementById("headerAvatar");
-  if (avatarEl) {
-    if (user.avatar) {
-      avatarEl.src = user.avatar;
-      avatarEl.classList.remove("hidden");
-    } else {
-      avatarEl.classList.add("hidden");
-    }
-  }
-
-  const badge = document.getElementById("userBadge");
-  if (badge) {
-    badge.classList.remove("hidden");
-    badge.textContent = `${user.name} (${user.phone}) - ${isAdmin ? "مشرف" : "مندوب"}`;
-  }
-
-  if (!isAdmin) {
-    const activeTab = document.querySelector(".tab-btn.active");
-    if (activeTab && activeTab.classList.contains("admin-only")) {
-      switchTab("analysisTab");
-    }
-  }
-
-  refreshRepSelect(user, isAdmin);
-  const tripAllowanceEl = document.getElementById("tripAllowance");
-  const defaultAllowanceEl = document.getElementById("defaultAllowanceInput");
-  if (tripAllowanceEl) tripAllowanceEl.value = getAllowance().toFixed(2);
-  if (defaultAllowanceEl) defaultAllowanceEl.value = getAllowance();
-  renderRepsList();
-  renderTripsTable();
-  if (typeof renderSavedLabAnalyses === "function") {
-    renderSavedLabAnalyses();
-  }
-}
-
-function refreshRepSelect(user, isAdmin) {
-  const select = document.getElementById("tripRepSelect");
-  if (!select) return;
-  const allAccounts = getAccounts();
-  const repsOnly = allAccounts.filter((a) => !isAccountAdmin(a));
-  const selectableList = isAdmin ? allAccounts : repsOnly;
-  select.innerHTML = "";
-
-  if (!isAdmin) {
-    const opt = document.createElement("option");
-    opt.value = user.name;
-    opt.textContent = user.name;
-    select.appendChild(opt);
-    select.disabled = true;
-  } else {
-    select.disabled = false;
-    selectableList.forEach((r) => {
-      const opt = document.createElement("option");
-      opt.value = r.name;
-      opt.textContent = isAccountAdmin(r) ? `${r.name} (مشرف)` : r.name;
-      select.appendChild(opt);
-    });
-  }
-}
-
-function ensureRoleSelectInAddRepForm() {
-  const form = document.getElementById("addRepForm");
-  if (!form || document.getElementById("newRepRole")) return;
-
-  const select = document.createElement("select");
-  select.id = "newRepRole";
-  select.innerHTML = `
-    <option value="rep">مندوب</option>
-    <option value="admin">مشرف</option>
-  `;
-
-  const submitBtn = form.querySelector("button[type='submit']");
-  if (submitBtn) {
-    form.insertBefore(select, submitBtn);
-  } else {
-    form.appendChild(select);
-  }
-}
-
-function renderRepsList() {
-  const ul = document.getElementById("repsList");
-  if (!ul) return;
-  const currentUser = getCurrentUser();
-  const currentPhone = currentUser ? normalizePhone(currentUser.phone) : "";
-  const members = getAccounts();
-  ul.innerHTML = "";
-
-  members.forEach((member) => {
-    const memberIsAdmin = isAccountAdmin(member);
-    const roleLabel = memberIsAdmin ? "مشرف" : "مندوب";
-    const statusText = member.password ? "تم تعيين كلمة السر" : "بانتظار تعيين كلمة السر";
-    const isSelf = normalizePhone(member.phone) === currentPhone;
-
-    const li = document.createElement("li");
-    li.innerHTML = `
-      <div class="rep-row-info">
-        ${member.avatar ? `<img src="${member.avatar}" class="rep-avatar-mini" alt="${member.name}" />` : ""}
-        <div>
-          <strong>${escapeHtml(member.name)}</strong> - <span>${escapeHtml(member.phone)}</span> <span>(${roleLabel})</span>
-          <div class="hint">${statusText}</div>
-        </div>
-      </div>
-      <button type="button" class="btn btn-danger" data-id="${member.id}" ${isSelf ? "disabled" : ""}>${isSelf ? "حسابك" : "حذف"}</button>
-    `;
-    const delBtn = li.querySelector("button");
-    if (!isSelf && delBtn) {
-      delBtn.addEventListener("click", () => {
-        const confirmed = confirm(`هل أنت متأكد من حذف الحساب الخاص بـ "${member.name}" (${member.phone})؟`);
-        if (!confirmed) return;
-
-        const remaining = getAccounts().filter((x) => x.id !== member.id);
-        setAccounts(remaining);
-        const user = getCurrentUser();
-        if (user) refreshRepSelect(user, isAccountAdmin(user));
-        renderRepsList();
-        pushToSheetBackground();
-      });
-    }
-    ul.appendChild(li);
-  });
-}
-
-// المشرف يرى جميع الرحلات (عدد مفتوح)، والمندوب يرى رحلاته كاملة
-function getAllUserTrips(user) {
-  const allTrips = getTrips();
-  if (!user) return [];
-  if (isAccountAdmin(user)) {
-    return allTrips;
-  }
-  const userPhone = normalizePhone(user.phone);
-  const userName = (user.name || "").trim();
-
-  return allTrips.filter((t) => {
-    const samePhone = t.ownerPhone && normalizePhone(t.ownerPhone) === userPhone;
-    const sameName = userName && (t.repName || "").trim() === userName;
-    return samePhone || sameName;
-  });
-}
-
-function getFilteredTrips() {
-  const user = getCurrentUser();
-  const from = document.getElementById("fromDate")?.value || "";
-  const to = document.getElementById("toDate")?.value || "";
-  const searchQuery = (document.getElementById("tripSearchInput")?.value || "").trim().toLowerCase();
-
-  return getAllUserTrips(user).filter((t) => {
-    if (from && t.date < from) return false;
-    if (to && t.date > to) return false;
-    if (searchQuery) {
-      const hay = `${t.repName || ""} ${t.client || ""} ${t.place || ""}`.toLowerCase();
-      if (!hay.includes(searchQuery)) return false;
-    }
-    return true;
-  });
-}
-
-function ensureTripsPaginationBar() {
-  const recordsTab = document.getElementById("recordsTab");
-  if (!recordsTab || document.getElementById("tripsPaginationBar")) return;
-
-  const bar = document.createElement("div");
-  bar.id = "tripsPaginationBar";
-  bar.className = "actions-row";
-  bar.style.marginTop = "12px";
-  bar.style.justifyContent = "center";
-  bar.style.alignItems = "center";
-  bar.innerHTML = `
-    <button type="button" id="prevTripsPageBtn" class="btn btn-outline">السابق</button>
-    <span id="tripsPageInfo" class="summary-text" style="margin: 0 10px;"></span>
-    <button type="button" id="nextTripsPageBtn" class="btn btn-outline">التالي</button>
-  `;
-
-  const tableWrap = recordsTab.querySelector(".table-wrap");
-  if (tableWrap) {
-    tableWrap.insertAdjacentElement("afterend", bar);
-  } else {
-    recordsTab.appendChild(bar);
-  }
-
-  document.getElementById("prevTripsPageBtn")?.addEventListener("click", () => {
-    if (currentTripsPage > 1) {
-      currentTripsPage -= 1;
-      renderTripsTable();
-    }
-  });
-
-  document.getElementById("nextTripsPageBtn")?.addEventListener("click", () => {
-    const totalPages = Math.max(1, Math.ceil(getFilteredTrips().length / TRIPS_PAGE_SIZE));
-    if (currentTripsPage < totalPages) {
-      currentTripsPage += 1;
-      renderTripsTable();
-    }
-  });
-}
-
-function renderTripsTable() {
-  ensureTripsPaginationBar();
-  const matched = getFilteredTrips();
-  const totalPages = Math.max(1, Math.ceil(matched.length / TRIPS_PAGE_SIZE));
-  if (currentTripsPage > totalPages) currentTripsPage = totalPages;
-  if (currentTripsPage < 1) currentTripsPage = 1;
-
-  const startIdx = (currentTripsPage - 1) * TRIPS_PAGE_SIZE;
-  const pageRows = matched.slice(startIdx, startIdx + TRIPS_PAGE_SIZE);
-
-  const tbody = document.getElementById("recordsBody");
-  if (!tbody) return;
-  tbody.innerHTML = "";
-
-  let totalAllowanceAll = 0;
-  matched.forEach((t) => {
-    totalAllowanceAll += parseFloat(t.allowance) || 0;
-  });
-
-  pageRows.forEach((t) => {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${escapeHtml(t.timestamp)}</td>
-      <td>${escapeHtml(t.date)}</td>
-      <td>${escapeHtml(t.repName)}</td>
-      <td>${escapeHtml(t.place)}</td>
-      <td>${escapeHtml(t.client)}</td>
-      <td>${(parseFloat(t.allowance) || 0).toFixed(2)}</td>
-      <td><button type="button" class="btn btn-danger btn-sm del-trip-btn" data-id="${escapeHtml(t.id)}">حذف</button></td>
-    `;
-    const delBtn = tr.querySelector(".del-trip-btn");
-    if (delBtn) {
-      delBtn.addEventListener("click", () => deleteTripById(t.id));
-    }
-    tbody.appendChild(tr);
-  });
-
-  const summaryEl = document.getElementById("recordsSummary");
-  if (summaryEl) {
-    summaryEl.textContent =
-      `إجمالي الرحلات: ${matched.length} | إجمالي بدل السفر: ${totalAllowanceAll.toFixed(2)} جنيه`;
-  }
-
-  const pageInfoEl = document.getElementById("tripsPageInfo");
-  const prevBtn = document.getElementById("prevTripsPageBtn");
-  const nextBtn = document.getElementById("nextTripsPageBtn");
-  const paginationBar = document.getElementById("tripsPaginationBar");
-
-  if (paginationBar) {
-    paginationBar.classList.toggle("hidden", matched.length <= TRIPS_PAGE_SIZE);
-  }
-  if (pageInfoEl) {
-    pageInfoEl.textContent = `صفحة ${currentTripsPage} من ${totalPages}`;
-  }
-  if (prevBtn) prevBtn.disabled = currentTripsPage <= 1;
-  if (nextBtn) nextBtn.disabled = currentTripsPage >= totalPages;
-}
-
-function escapeHtml(val) {
-  return String(val ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-function cellStyle(bgHex, textHex = "0F172A", bold = false, align = "center") {
-  return {
-    font: { name: "Calibri", sz: 11, bold, color: { rgb: textHex } },
-    fill: { patternType: "solid", fgColor: { rgb: bgHex } },
-    alignment: { horizontal: align, vertical: "center" },
-    border: {
-      top: { style: "thin", color: { rgb: "64748B" } },
-      bottom: { style: "thin", color: { rgb: "64748B" } },
-      left: { style: "thin", color: { rgb: "64748B" } },
-      right: { style: "thin", color: { rgb: "64748B" } }
-    }
-  };
-}
-
-function exportTripsToExcel() {
-  const user = getCurrentUser();
-  if (!user || !isAccountAdmin(user)) {
-    alert("تصدير ملف Excel متاح للمشرفين فقط.");
-    return;
-  }
-
-  if (typeof XLSX === "undefined") {
-    alert("تعذر تحميل مكتبة تصدير XLSX. تأكد من الاتصال بالإنترنت ثم أعد المحاولة.");
-    return;
-  }
-
-  const rows = getFilteredTrips();
-
-  const repNamesSet = new Set(
-    getAccounts()
-      .filter((a) => !isAccountAdmin(a))
-      .map((a) => a.name)
-  );
-  rows.forEach((r) => {
-    if (r.repName) repNamesSet.add(r.repName);
-  });
-  const repNames = Array.from(repNamesSet);
-
-  const ws = {};
-  ws["!views"] = [{ RTL: true }];
-
-  const headers = ["طابع زمني", "التاريخ", "اسم المندوب", "المكان", "اسم العميل", "بدل السفر"];
-  headers.forEach((h, colIdx) => {
-    const ref = XLSX.utils.encode_cell({ r: 0, c: colIdx });
-    ws[ref] = { t: "s", v: h, s: cellStyle("1E293B", "FFFFFF", true, "center") };
-  });
-
-  rows.forEach((r, idx) => {
-    const excelRowNum = idx + 2;
-    const allowanceNum = Number(parseFloat(r.allowance) || 0);
-    const bg = idx % 2 === 0 ? "FFFFFF" : "F8FAFC";
-
-    ws[`A${excelRowNum}`] = { t: "s", v: String(r.timestamp || ""), s: cellStyle(bg, "0F172A", false, "right") };
-    ws[`B${excelRowNum}`] = { t: "s", v: String(r.date || ""), s: cellStyle(bg, "0F172A", false, "center") };
-    ws[`C${excelRowNum}`] = { t: "s", v: String(r.repName || ""), s: cellStyle(bg, "0F172A", false, "right") };
-    ws[`D${excelRowNum}`] = { t: "s", v: String(r.place || ""), s: cellStyle(bg, "0F172A", false, "right") };
-    ws[`E${excelRowNum}`] = { t: "s", v: String(r.client || ""), s: cellStyle(bg, "0F172A", false, "right") };
-    ws[`F${excelRowNum}`] = {
-      t: "n",
-      v: allowanceNum,
-      z: "#,##0.00",
-      s: cellStyle(bg, "0F172A", false, "center")
-    };
-  });
-
-  const lastDataRow = Math.max(rows.length + 1, 2);
-  const summaryHeaderRow = Math.max(rows.length + 5, 14);
-  const summaryStartRow = summaryHeaderRow + 1;
-
-  ws[`G${summaryHeaderRow}`] = { t: "s", v: "المندوب", s: cellStyle("0F172A", "FFFFFF", true, "right") };
-  ws[`H${summaryHeaderRow}`] = { t: "s", v: "عدد الأيام", s: cellStyle("0F172A", "FFFFFF", true, "center") };
-  ws[`I${summaryHeaderRow}`] = { t: "s", v: "إجمالي البدل", s: cellStyle("0F172A", "FFFFFF", true, "center") };
-
-  repNames.forEach((repName, i) => {
-    const rowNum = summaryStartRow + i;
-    ws[`G${rowNum}`] = {
-      t: "s",
-      v: repName,
-      s: cellStyle("FFEDD5", "7C2D12", true, "right")
-    };
-    ws[`H${rowNum}`] = {
-      t: "n",
-      f: `COUNTIF($C$2:$C$${lastDataRow},G${rowNum})`,
-      z: "0",
-      s: cellStyle("FEE2E2", "991B1B", true, "center")
-    };
-    ws[`I${rowNum}`] = {
-      t: "n",
-      f: `SUMIF($C$2:$C$${lastDataRow},G${rowNum},$F$2:$F$${lastDataRow})`,
-      z: "#,##0",
-      s: cellStyle("E2E8F0", "0F172A", true, "center")
-    };
-  });
-
-  const summaryEndRow = summaryStartRow + Math.max(repNames.length - 1, 0);
-  const totalRowNum = summaryEndRow + 1;
-
-  ws[`G${totalRowNum}`] = { t: "s", v: "TOTAL", s: cellStyle("1E293B", "FFFFFF", true, "right") };
-  ws[`H${totalRowNum}`] = {
-    t: "n",
-    f: `SUM(H${summaryStartRow}:H${summaryEndRow})`,
-    z: "0",
-    s: cellStyle("DBEAFE", "1E3A8A", true, "center")
-  };
-  ws[`I${totalRowNum}`] = {
-    t: "n",
-    f: `SUM(I${summaryStartRow}:I${summaryEndRow})`,
-    z: "#,##0",
-    s: cellStyle("DCFCE7", "14532D", true, "center")
+/* TAGADDOD Delta Reps - client application. Google Sheets is the source of truth. */
+(() => {
+  "use strict";
+
+  const CONFIG = {
+    sheetUrl: "https://script.google.com/macros/s/AKfycbyvS1rBt0LLWheSWSH0Uk9dwKmeWF5i_T5Rr7iWSUaeS-X8dqVhHOu5rj8chF8E2Bk/exec",
+    sessionKey: "delta_session_token_v5",
+    cacheKey: "delta_state_cache_v5",
+    pageSize: 15
   };
 
-  ws["!ref"] = `A1:I${totalRowNum}`;
-  ws["!cols"] = [
-    { wch: 24 },
-    { wch: 14 },
-    { wch: 18 },
-    { wch: 18 },
-    { wch: 18 },
-    { wch: 14 },
-    { wch: 18 },
-    { wch: 13 },
-    { wch: 15 }
-  ];
+  const $ = (id) => document.getElementById(id);
+  let state = { user: null, accounts: [], trips: [], allowance: 150 };
+  let currentPage = 1;
+  let busy = false;
+  let firstLoginMode = false;
+  let lastLoginPhone = "";
+  let toastTimer = null;
 
-  const wb = XLSX.utils.book_new();
-  wb.Workbook = { Views: [{ RTL: true }] };
-  XLSX.utils.book_append_sheet(wb, ws, "سجلات_مناديب_الدلتا");
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const normalizePhone = (value) => {
+    let digits = String(value || "").replace(/\D/g, "");
+    if (digits.length === 10 && /^(10|11|12|15)/.test(digits)) digits = `0${digits}`;
+    return digits;
+  };
+  const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[ch]));
+  const isAdmin = () => state.user?.role === "admin";
+  const sessionToken = () => localStorage.getItem(CONFIG.sessionKey) || "";
 
-  const wbout = XLSX.write(wb, {
-    bookType: "xlsx",
-    type: "array",
-    cellStyles: true
-  });
-
-  const blob = new Blob([wbout], {
-    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-  });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `سجلات_مناديب_الدلتا_${new Date().toISOString().slice(0, 10)}.xlsx`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
-function openLoginScreen() {
-  isAuthSubmitting = false;
-  const submitBtn = document.getElementById("phoneAuthBtn");
-  if (submitBtn) submitBtn.disabled = false;
-  setActiveView("auth");
-}
-
-function showSamplesView() {
-  setActiveView("app");
-  switchTab("analysisTab");
-}
-
-function switchTab(tabId) {
-  const needsAuth = tabId === "newTripTab" || tabId === "recordsTab" || tabId === "adminTab";
-  if (needsAuth && !getCurrentUser()) {
-    openLoginScreen();
-    return;
-  }
-
-  document.querySelectorAll(".tab-btn").forEach((b) => {
-    b.classList.toggle("active", b.dataset.tab === tabId);
-  });
-  document.querySelectorAll(".tab-panel").forEach((p) => {
-    p.classList.toggle("active", p.id === tabId);
-  });
-  if (tabId === "analysisTab" && typeof renderSavedLabAnalyses === "function") {
-    renderSavedLabAnalyses();
-  }
-  if (tabId === "recordsTab") {
-    currentTripsPage = 1;
-    renderTripsTable();
-    pullFromSheetBackground(2000);
-  }
-}
-
-document.addEventListener("DOMContentLoaded", () => {
-  try {
-    initPasswordToggles();
-    updateConnectionStatusBadge();
-    window.addEventListener("online", () => {
-      updateConnectionStatusBadge();
-      pullFromSheetBackground(2000);
-      pushToSheetBackground();
-    });
-    window.addEventListener("offline", updateConnectionStatusBadge);
-
-    ensureRoleSelectInAddRepForm();
-    getAccounts();
-    setTrips(getTrips());
-
-    const tripDateEl = document.getElementById("tripDate");
-    if (tripDateEl) {
-      tripDateEl.value = new Date().toISOString().slice(0, 10);
+  function showToast(message, kind = "info", duration = 4200) {
+    let el = $("appToast");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "appToast";
+      el.className = "app-toast";
+      el.setAttribute("role", "status");
+      el.setAttribute("aria-live", "polite");
+      document.body.appendChild(el);
     }
+    clearTimeout(toastTimer);
+    el.className = `app-toast ${kind} visible`;
+    el.textContent = message;
+    if (kind !== "loading") toastTimer = setTimeout(() => el.classList.remove("visible"), duration);
+  }
+  window.showAppToast = showToast;
 
-    const loginPhoneEl = document.getElementById("loginPhoneInput");
-    if (loginPhoneEl) {
-      loginPhoneEl.addEventListener("input", syncAuthFieldsForPhone);
-      loginPhoneEl.addEventListener("change", syncAuthFieldsForPhone);
+  function setStatus(message, kind = "info") {
+    const el = $("syncStatus");
+    if (el) {
+      el.textContent = message;
+      el.className = `notice ${kind}`;
     }
+    showToast(message, kind);
+  }
 
-    document.getElementById("openLoginFromSamplesBtn")?.addEventListener("click", openLoginScreen);
-    document.getElementById("backToSamplesBtn")?.addEventListener("click", showSamplesView);
-    document.getElementById("cancelLoginBtn")?.addEventListener("click", showSamplesView);
-    document.getElementById("phoneAuthBtn")?.addEventListener("click", handlePhoneAuthSubmit);
+  function setConnectionBadge() {
+    const badge = $("connectionStatusBadge");
+    if (!badge) return;
+    const online = navigator.onLine;
+    badge.textContent = online ? "متصل بالإنترنت" : "غير متصل";
+    badge.classList.toggle("status-online", online);
+    badge.classList.toggle("status-offline", !online);
+  }
 
-    document.getElementById("openChangePassBtn")?.addEventListener("click", () => {
-      setActiveView("profile");
-    });
-
-    document.getElementById("closeProfileModalBtn")?.addEventListener("click", () => {
-      setActiveView("app");
-    });
-
-    document.getElementById("saveProfileChangesBtn")?.addEventListener("click", async () => {
-      const user = getCurrentUser();
-      if (!user) return;
-
-      const oldPhone = normalizePhone(user.phone);
-      const newPhone = normalizePhone(document.getElementById("updatePhoneInput")?.value);
-      const currentPass = document.getElementById("currentPassInput")?.value || "";
-      const newPass = document.getElementById("updatedPassInput")?.value || "";
-      const newAvatar = await readImageAsDataUrl(document.getElementById("updateAvatarInput"));
-
-      const patch = {};
-
-      if (newPhone && newPhone !== oldPhone) {
-        if (newPhone.length < 10) {
-          alert("من فضلك أدخل رقم تليفون صحيح.");
-          return;
-        }
-        const existingWithPhone = findAccountByPhone(newPhone);
-        if (existingWithPhone && existingWithPhone.id !== user.id) {
-          alert("رقم التليفون الجديد مسجل بالفعل لحساب آخر.");
-          return;
-        }
-        patch.phone = newPhone;
-      }
-
-      if (newPass) {
-        if (currentPass !== user.password) {
-          alert("كلمة السر الحالية غير صحيحة.");
-          return;
-        }
-        if (newPass.length < 4) {
-          alert("كلمة السر الجديدة يجب أن تكون 4 خانات أو أكثر.");
-          return;
-        }
-        patch.password = newPass;
-      }
-
-      if (newAvatar) {
-        patch.avatar = newAvatar;
-      }
-
-      if (!patch.phone && !patch.password && !patch.avatar) {
-        alert("أدخل رقم تليفون جديد، أو كلمة سر جديدة، أو اختر صورة لتحديثها.");
-        return;
-      }
-
-      const updated = updateAccount(user.id, patch);
-
-      if (patch.phone) {
-        localStorage.setItem(KEYS.session, patch.phone);
-        const updatedTrips = getTrips().map((t) =>
-          normalizePhone(t.ownerPhone) === oldPhone ? { ...t, ownerPhone: patch.phone } : t
-        );
-        setTrips(updatedTrips);
-      }
-
-      document.getElementById("updatePhoneInput").value = "";
-      document.getElementById("currentPassInput").value = "";
-      document.getElementById("updatedPassInput").value = "";
-      document.getElementById("updateAvatarInput").value = "";
-      applyRoleUI(updated);
-      pushToSheetBackground();
-      alert("تم حفظ التعديلات بنجاح.");
-    });
-
-    document.getElementById("logoutBtn")?.addEventListener("click", () => {
-      localStorage.removeItem(KEYS.session);
-      setActiveView("app");
-      switchTab("analysisTab");
-      location.reload();
-    });
-
-    document.querySelectorAll(".tab-btn").forEach((btn) => {
-      btn.addEventListener("click", () => switchTab(btn.dataset.tab));
-    });
-
-    document.getElementById("tripForm")?.addEventListener("submit", (e) => {
-      e.preventDefault();
-      if (!navigator.onLine) {
-        alert("النت فاصل يا برنس متقدرش تسجل الرحله دلوقتي حاول تاني لمى النت يرجع");
-        return;
-      }
-
-      const user = getCurrentUser();
-      if (!user) return;
-
-      const newTrip = {
-        id: `trip_${Date.now()}`,
-        ownerPhone: user.phone,
-        timestamp: new Date().toLocaleString("ar-EG"),
-        date: document.getElementById("tripDate").value,
-        repName: document.getElementById("tripRepSelect").value,
-        place: document.getElementById("tripPlace").value.trim(),
-        client: document.getElementById("tripClient").value.trim(),
-        allowance: parseFloat(document.getElementById("tripAllowance").value) || 0
+  // JSONP is used for GET responses; POST uses text/plain/no-cors to avoid a CORS preflight.
+  // The server stores each POST result briefly and it is retrieved through the JSONP result endpoint.
+  function apiGet(params = {}, timeoutMs = 10000) {
+    return new Promise((resolve, reject) => {
+      if (!CONFIG.sheetUrl) return reject(new Error("لم يتم ضبط رابط Google Apps Script."));
+      const callback = `__delta_cb_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      const script = document.createElement("script");
+      const query = new URLSearchParams({ ...params, callback });
+      let settled = false;
+      const finish = (fn, value) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        delete window[callback];
+        script.remove();
+        fn(value);
       };
-
-      const trips = getTrips();
-      trips.unshift(newTrip);
-      setTrips(trips);
-
-      currentTripsPage = 1;
-      document.getElementById("tripPlace").value = "";
-      document.getElementById("tripClient").value = "";
-      renderTripsTable();
-      pushToSheetBackground();
-      alert("تم حفظ الرحلة وبدل السفر بنجاح.");
+      window[callback] = (data) => finish(resolve, data);
+      script.onerror = () => finish(reject, new Error("تعذر الاتصال بخدمة Google Sheets."));
+      const timer = setTimeout(() => finish(reject, new Error("انتهت مهلة الاتصال بخدمة Google Sheets.")), timeoutMs);
+      script.src = `${CONFIG.sheetUrl}?${query.toString()}`;
+      document.head.appendChild(script);
     });
-
-    document.getElementById("addRepForm")?.addEventListener("submit", (e) => {
-      e.preventDefault();
-      const name = document.getElementById("newRepName").value.trim();
-      const phone = normalizePhone(document.getElementById("newRepPhone").value);
-      const roleSelect = document.getElementById("newRepRole");
-      const selectedRole = roleSelect && roleSelect.value === "admin" ? "admin" : "rep";
-
-      if (!name || !phone) {
-        alert("من فضلك أدخل الاسم ورقم التليفون.");
-        return;
-      }
-
-      const existing = findAccountByPhone(phone);
-      if (existing) {
-        alert("رقم التليفون ده مسجل بالفعل.");
-        return;
-      }
-
-      const list = getAccounts();
-      list.push({
-        id: `${selectedRole}_${Date.now()}`,
-        name,
-        phone,
-        role: selectedRole,
-        password: "",
-        avatar: ""
-      });
-      setAccounts(list);
-
-      document.getElementById("newRepName").value = "";
-      document.getElementById("newRepPhone").value = "";
-      if (roleSelect) roleSelect.value = "rep";
-
-      const user = getCurrentUser();
-      if (user) refreshRepSelect(user, isAccountAdmin(user));
-      renderRepsList();
-      pushToSheetBackground();
-    });
-
-    document.getElementById("saveAllowanceBtn")?.addEventListener("click", () => {
-      const val = document.getElementById("defaultAllowanceInput")?.value;
-      setAllowance(val);
-      const tripAllowanceEl = document.getElementById("tripAllowance");
-      if (tripAllowanceEl) {
-        tripAllowanceEl.value = getAllowance().toFixed(2);
-      }
-      pushToSheetBackground();
-      alert("تم حفظ قيمة بدل السفر الافتراضية.");
-    });
-
-    document.getElementById("fromDate")?.addEventListener("change", () => {
-      currentTripsPage = 1;
-      renderTripsTable();
-    });
-    document.getElementById("toDate")?.addEventListener("change", () => {
-      currentTripsPage = 1;
-      renderTripsTable();
-    });
-    document.getElementById("tripSearchInput")?.addEventListener("input", () => {
-      currentTripsPage = 1;
-      renderTripsTable();
-    });
-    document.getElementById("exportExcelBtn")?.addEventListener("click", exportTripsToExcel);
-
-    showSamplesView();
-    const existingUser = getCurrentUser();
-    if (existingUser) {
-      applyRoleUI(existingUser);
-      pullFromSheetBackground(2000);
-    }
-  } catch (err) {
-    console.error("App init error:", err);
   }
-});
+
+  async function apiPost(action, payload = {}) {
+    if (!navigator.onLine) throw new Error("الإنترنت فاصل. افتح الإنترنت الأول وبعد كده سجل.");
+    if (!CONFIG.sheetUrl) throw new Error("رابط Google Sheets غير مضبوط.");
+    const requestId = (crypto.randomUUID?.() || `req_${Date.now()}_${Math.random().toString(36).slice(2)}`).replace(/[^a-zA-Z0-9_-]/g, "");
+    const body = { requestId, action, payload, sessionToken: sessionToken() };
+    const controller = new AbortController();
+    const sendTimer = setTimeout(() => controller.abort(), 18000);
+    try {
+      await fetch(CONFIG.sheetUrl, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify(body),
+        signal: controller.signal
+      });
+    } catch (error) {
+      if (!navigator.onLine) throw new Error("الإنترنت فاصل. افتح الإنترنت الأول وبعد كده سجل.");
+      throw new Error("تعذر تأكيد الاتصال بخدمة التسجيل. راجع سجل الرحلات قبل إعادة المحاولة حتى لا يتكرر التسجيل.");
+    } finally {
+      clearTimeout(sendTimer);
+    }
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      if (!navigator.onLine) throw new Error("انقطع الإنترنت قبل تأكيد التسجيل. راجع سجل الرحلات قبل إعادة المحاولة.");
+      const result = await apiGet({ action: "result", requestId }, 5000);
+      if (result && result.pending !== true) {
+        if (!result.ok) { const error = new Error(result.error || "تعذر تنفيذ العملية."); error.code = result.code || ""; throw error; }
+        return result;
+      }
+      await sleep(450);
+    }
+    throw new Error("التسجيل أُرسل لكن لم يصل تأكيد Google Sheets. راجع سجل الرحلات قبل إعادة المحاولة حتى لا يتكرر التسجيل.");
+  }
+
+  function cacheState() {
+    try { localStorage.setItem(CONFIG.cacheKey, JSON.stringify(state)); } catch (_) { /* quota */ }
+  }
+
+  function readCachedState() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(CONFIG.cacheKey) || "null");
+      if (saved && typeof saved === "object") state = { ...state, ...saved };
+    } catch (_) { /* ignore invalid cache */ }
+  }
+
+  function applyServerState(data) {
+    if (!data || !data.user) throw new Error("استجابة غير مكتملة من الخادم.");
+    state = {
+      user: data.user,
+      accounts: Array.isArray(data.accounts) ? data.accounts : [],
+      trips: (Array.isArray(data.trips) ? data.trips : []).sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")) || String(b.id || "").localeCompare(String(a.id || ""))),
+      allowance: Number.isFinite(Number(data.allowance)) ? Number(data.allowance) : 150
+    };
+    cacheState();
+    renderAll();
+  }
+
+  async function pullState(showMessage = false) {
+    if (!sessionToken()) return false;
+    if (!navigator.onLine) {
+      if (showMessage) setStatus("أنت غير متصل. يتم عرض آخر بيانات محفوظة على هذا الجهاز.", "warning");
+      return false;
+    }
+    try {
+      if (showMessage) setStatus("جاري تحديث البيانات من Google Sheets...", "loading");
+      const response = await apiPost("get_state", {});
+      if (!response?.ok) throw new Error(response?.error || "تعذر تحميل البيانات.");
+      applyServerState(response.data);
+      if (showMessage) setStatus("تم تحديث البيانات من Google Sheets.", "success");
+      return true;
+    } catch (error) {
+      if (showMessage) setStatus(error.message, "error");
+      return false;
+    }
+  }
+
+  async function runMutation(action, payload, successMessage, loadingMessage = "جاري تنفيذ العملية...") {
+    if (busy) return false;
+    if (!navigator.onLine) {
+      showToast("النت فاصل. افتح النت الأول وبعد كده سجل.", "error", 6000);
+      return false;
+    }
+    busy = true;
+    showToast(loadingMessage, "loading");
+    try {
+      await apiPost(action, payload);
+      await pullState(false);
+      if (successMessage) setStatus(successMessage, "success");
+      return true;
+    } catch (error) {
+      setStatus(error.message, "error");
+      return false;
+    } finally {
+      busy = false;
+    }
+  }
+
+  function setView(view) {
+    ["authSection", "profileModalSection", "appSection"].forEach((id) => $(id)?.classList.add("hidden"));
+    if (view === "auth") $("authSection")?.classList.remove("hidden");
+    else if (view === "profile") $("profileModalSection")?.classList.remove("hidden");
+    else $("appSection")?.classList.remove("hidden");
+    $("openLoginFromSamplesBtn")?.classList.toggle("hidden", view !== "app" || Boolean(state.user));
+    $("backToSamplesBtn")?.classList.toggle("hidden", view !== "auth");
+  }
+
+  function switchTab(tabId) {
+    if (["newTripTab", "recordsTab", "adminTab"].includes(tabId) && !state.user) {
+      openLogin();
+      return;
+    }
+    if (tabId === "adminTab" && !isAdmin()) {
+      alert("هذه الصفحة متاحة للمشرف فقط.");
+      return;
+    }
+    document.querySelectorAll(".tab-btn").forEach((button) => button.classList.toggle("active", button.dataset.tab === tabId));
+    document.querySelectorAll(".tab-panel").forEach((panel) => panel.classList.toggle("active", panel.id === tabId));
+    if (tabId === "recordsTab") {
+      currentPage = 1;
+      renderTrips();
+      pullState(false);
+    }
+    if (tabId === "analysisTab" && typeof renderSavedLabAnalyses === "function") renderSavedLabAnalyses();
+  }
+
+  function renderHeader() {
+    const badge = $("userBadge");
+    if (badge) {
+      badge.textContent = state.user ? `${state.user.name} · ${state.user.phone} · ${isAdmin() ? "مشرف" : "مندوب"}` : "زائر";
+      badge.classList.toggle("hidden", !state.user);
+    }
+    const avatar = $("headerAvatar");
+    if (avatar) {
+      avatar.src = state.user?.avatar || "";
+      avatar.classList.toggle("hidden", !state.user?.avatar);
+    }
+    $("logoutBtn")?.classList.toggle("hidden", !state.user);
+    $("openChangePassBtn")?.classList.toggle("hidden", !state.user);
+    document.querySelectorAll(".admin-only").forEach((el) => el.classList.toggle("hidden", !isAdmin()));
+    setConnectionBadge();
+  }
+
+  function renderRepSelect() {
+    const select = $("tripRepSelect");
+    if (!select || !state.user) return;
+    const reps = isAdmin() ? state.accounts : [state.user];
+    select.innerHTML = reps.map((account) => `<option value="${escapeHtml(account.phone)}">${escapeHtml(account.name)}${account.role === "admin" ? " (مشرف)" : ""}</option>`).join("");
+    select.disabled = !isAdmin();
+  }
+
+  function renderReps() {
+    const list = $("repsList");
+    if (!list) return;
+    list.innerHTML = "";
+    state.accounts.forEach((account) => {
+      const li = document.createElement("li");
+      const info = document.createElement("div");
+      info.className = "rep-row-info";
+      if (account.avatar) {
+        const img = document.createElement("img");
+        img.src = account.avatar;
+        img.alt = "";
+        img.className = "rep-avatar-mini";
+        info.appendChild(img);
+      }
+      const text = document.createElement("div");
+      text.innerHTML = `<strong>${escapeHtml(account.name)}</strong><div class="hint">${escapeHtml(account.phone)} · ${account.role === "admin" ? "مشرف" : "مندوب"}</div>`;
+      info.appendChild(text);
+      li.appendChild(info);
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "btn btn-danger";
+      remove.textContent = "حذف";
+      remove.disabled = account.phone === state.user?.phone || account.role === "admin";
+      remove.title = remove.disabled ? "لا يمكن حذف حسابك أو حساب مشرف من هذه القائمة" : "حذف الحساب";
+      remove.addEventListener("click", async () => {
+        if (!confirm(`تأكيد حذف حساب ${account.name}؟`)) return;
+        await runMutation("delete_account", { phone: account.phone }, "تم حذف الحساب بنجاح.", "جاري حذف الحساب...");
+      });
+      li.appendChild(remove);
+      list.appendChild(li);
+    });
+  }
+
+  function getVisibleTrips() {
+    const from = $("fromDate")?.value || "";
+    const to = $("toDate")?.value || "";
+    const query = ($("tripSearchInput")?.value || "").trim().toLocaleLowerCase("ar-EG");
+    return state.trips.filter((trip) => {
+      if (from && trip.date < from) return false;
+      if (to && trip.date > to) return false;
+      const text = `${trip.repName || ""} ${trip.place || ""} ${trip.client || ""}`.toLocaleLowerCase("ar-EG");
+      return !query || text.includes(query);
+    });
+  }
+
+  function renderTrips() {
+    const tbody = $("recordsBody");
+    if (!tbody) return;
+    const rows = getVisibleTrips();
+    const pages = Math.max(1, Math.ceil(rows.length / CONFIG.pageSize));
+    currentPage = Math.min(Math.max(1, currentPage), pages);
+    const visible = rows.slice((currentPage - 1) * CONFIG.pageSize, currentPage * CONFIG.pageSize);
+    tbody.innerHTML = "";
+    visible.forEach((trip) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td>${escapeHtml(trip.timestamp || "")}</td><td>${escapeHtml(trip.date || "")}</td><td>${escapeHtml(trip.repName || "")}</td><td>${escapeHtml(trip.place || "")}</td><td>${escapeHtml(trip.client || "")}</td><td>${Number(trip.allowance || 0).toFixed(2)}</td>`;
+      if (isAdmin()) {
+        const cell = document.createElement("td");
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "btn btn-danger btn-sm";
+        button.textContent = "حذف";
+        button.addEventListener("click", async () => {
+          if (confirm("هل تريد حذف هذه الرحلة نهائيًا؟")) await runMutation("delete_trip", { id: trip.id }, "تم حذف الرحلة بنجاح.", "جاري حذف الرحلة...");
+        });
+        cell.appendChild(button);
+        tr.appendChild(cell);
+      }
+      tbody.appendChild(tr);
+    });
+    $("recordsSummary").textContent = `إجمالي الرحلات: ${rows.length} | إجمالي بدل السفر: ${rows.reduce((sum, t) => sum + Number(t.allowance || 0), 0).toFixed(2)} جنيه`;
+    $("tripsPageInfo").textContent = `صفحة ${currentPage} من ${pages}`;
+    $("prevTripsPageBtn").disabled = currentPage <= 1;
+    $("nextTripsPageBtn").disabled = currentPage >= pages;
+    $("tripsPaginationBar").classList.toggle("hidden", rows.length <= CONFIG.pageSize);
+  }
+
+  function renderAll() {
+    renderHeader();
+    renderRepSelect();
+    renderReps();
+    renderTrips();
+    if ($("tripAllowance")) $("tripAllowance").value = Number(state.allowance).toFixed(2);
+    if ($("defaultAllowanceInput")) $("defaultAllowanceInput").value = Number(state.allowance).toFixed(2);
+  }
+
+  function syncAuthFields() {
+    const phone = normalizePhone($("loginPhoneInput")?.value);
+    if (phone !== lastLoginPhone) { firstLoginMode = false; lastLoginPhone = phone; }
+    const account = state.accounts.find((item) => normalizePhone(item.phone) === phone);
+    const firstTime = firstLoginMode || Boolean(account && account.firstLogin);
+    $("existingPasswordBox")?.classList.toggle("hidden", firstTime);
+    $("firstTimeSetupBox")?.classList.toggle("hidden", !firstTime);
+    $("authTitle").textContent = firstTime ? "تعيين كلمة سر لأول مرة" : "تسجيل الدخول";
+    $("authHint").textContent = firstTime ? "اكتب كلمة سر جديدة لحسابك." : "أدخل رقم التليفون وكلمة السر المسجلة.";
+    $("phoneAuthBtn").textContent = firstTime ? "حفظ كلمة السر والدخول" : "تسجيل الدخول";
+  }
+
+  async function login() {
+    if (busy) return;
+    if (!navigator.onLine) {
+      showToast("النت فاصل. افتح النت الأول وبعد كده سجل الدخول.", "error", 6000);
+      return;
+    }
+    const phone = normalizePhone($("loginPhoneInput").value);
+    const password = $("loginPasswordInput").value;
+    const newPassword = $("setupPasswordInput").value;
+    const confirmPassword = $("confirmPasswordInput").value;
+    if (phone.length < 10) return alert("من فضلك أدخل رقم تليفون صحيح.");
+    const account = state.accounts.find((item) => normalizePhone(item.phone) === phone);
+    const firstTime = firstLoginMode || Boolean(account?.firstLogin);
+    if (firstTime && (newPassword.length < 4 || newPassword !== confirmPassword)) return alert("اكتب كلمة سر من 4 خانات على الأقل وتأكد من تطابقها.");
+    busy = true;
+    $("phoneAuthBtn").disabled = true;
+    showToast("جاري الدخول للحساب... برجاء الانتظار", "loading");
+    try {
+      const result = await apiPost("login", { phone, password: firstTime ? "" : password, newPassword: firstTime ? newPassword : "" });
+      localStorage.setItem(CONFIG.sessionKey, result.sessionToken);
+      $("loginPasswordInput").value = "";
+      $("setupPasswordInput").value = "";
+      $("confirmPasswordInput").value = "";
+      const loaded = await pullState(false);
+      if (!loaded) throw new Error("تم تسجيل الدخول لكن تعذر تحميل بيانات الحساب. حاول تحديث الصفحة.");
+      setView("app");
+      switchTab("analysisTab");
+      setStatus("تم تسجيل الدخول ومزامنة البيانات.", "success");
+    } catch (error) {
+      if (error.code === "FIRST_LOGIN") {
+        firstLoginMode = true;
+        syncAuthFields();
+        showToast("هذا أول دخول للحساب. عيّن كلمة سر جديدة ثم حاول الدخول.", "warning", 6500);
+      } else if (error.code === "PASSWORD_REQUIRED") {
+        firstLoginMode = false;
+        syncAuthFields();
+        showToast(error.message, "error", 6000);
+      } else {
+        showToast(error.message, "error", 6000);
+      }
+    } finally {
+      busy = false;
+      $("phoneAuthBtn").disabled = false;
+    }
+  }
+
+  function openLogin() {
+    setView("auth");
+    syncAuthFields();
+  }
+
+  async function readCompressedAvatar(file) {
+    if (!file) return "";
+    if (!file.type.startsWith("image/")) throw new Error("الملف المختار ليس صورة.");
+    const dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+    const image = new Image();
+    image.src = dataUrl;
+    await image.decode();
+    const scale = Math.min(1, 180 / Math.max(image.width, image.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(image.width * scale));
+    canvas.height = Math.max(1, Math.round(image.height * scale));
+    canvas.getContext("2d").drawImage(image, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL("image/jpeg", 0.55);
+  }
+
+  async function saveProfile() {
+    if (!navigator.onLine) return showToast("النت فاصل. افتح النت الأول وبعد كده احفظ التعديلات.", "error", 6000);
+    try {
+      showToast("جاري تجهيز البيانات...", "loading");
+      const payload = {
+        phone: normalizePhone($("updatePhoneInput").value),
+        currentPassword: $("currentPassInput").value,
+        newPassword: $("updatedPassInput").value,
+        avatar: await readCompressedAvatar($("updateAvatarInput").files?.[0])
+      };
+      if (!payload.phone && !payload.newPassword && !payload.avatar) return showToast("أدخل تعديلًا واحدًا على الأقل.", "warning");
+      if (payload.newPassword && payload.newPassword.length < 4) return showToast("كلمة السر الجديدة يجب أن تكون 4 خانات على الأقل.", "warning");
+      const ok = await runMutation("update_profile", payload, "تم تحديث بيانات الحساب بنجاح.", "جاري حفظ بيانات الحساب...");
+      if (ok) {
+        ["updatePhoneInput", "currentPassInput", "updatedPassInput", "updateAvatarInput"].forEach((id) => { $(id).value = ""; });
+        setView("app");
+      }
+    } catch (error) {
+      showToast(error.message || "تعذر تجهيز التعديلات.", "error", 6000);
+    }
+  }
+
+  function exportExcel() {
+    if (!isAdmin()) return showToast("تصدير Excel متاح للمشرف فقط.", "error");
+    if (typeof XLSX === "undefined") return showToast("مكتبة Excel لم تُحمّل. تأكد من الإنترنت ثم حاول مرة أخرى.", "error", 6000);
+    const from = $("fromDate").value;
+    const to = $("toDate").value;
+    if (!from || !to) return showToast("حدد تاريخ البداية والنهاية قبل التصدير.", "warning");
+    if (from > to) return showToast("تاريخ البداية يجب ألا يكون بعد تاريخ النهاية.", "warning");
+
+    showToast("جاري تجهيز ملف Excel وتنسيق الجداول...", "loading");
+    try {
+      const rows = getVisibleTrips();
+      const repNames = [...new Set(rows.map((trip) => trip.repName).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ar"));
+      const totalAllowance = rows.reduce((sum, trip) => sum + Number(trip.allowance || 0), 0);
+      const aoa = [
+        ["تقرير رحلات مناديب الدلتا - TAGADDOD", "", "", "", "", ""],
+        ["وقت التسجيل", "تاريخ الرحلة", "اسم المندوب", "المكان / المحافظة", "اسم العميل", "بدل السفر (ج.م)"],
+        ...rows.map((trip) => [trip.timestamp || "", trip.date || "", trip.repName || "", trip.place || "", trip.client || "", Number(trip.allowance || 0)])
+      ];
+      const summaryTitleRow = aoa.length + 2;
+      aoa.push([], ["ملخص بدل السفر حسب المندوب", "", ""]);
+      const summaryHeaderRow = aoa.length + 1;
+      aoa.push(["اسم المندوب", "عدد الرحلات", "إجمالي بدل السفر (ج.م)"]);
+      repNames.forEach((name) => {
+        const own = rows.filter((trip) => trip.repName === name);
+        aoa.push([name, own.length, own.reduce((sum, trip) => sum + Number(trip.allowance || 0), 0)]);
+      });
+      const grandTotalRow = aoa.length + 1;
+      aoa.push(["الإجمالي العام", rows.length, totalAllowance]);
+
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      ws["!views"] = [{ RTL: true }];
+      ws["!cols"] = [{ wch: 22 }, { wch: 15 }, { wch: 23 }, { wch: 23 }, { wch: 27 }, { wch: 19 }];
+      ws["!rows"] = aoa.map((_, index) => ({ hpt: index === 0 || index + 1 === summaryTitleRow || index + 1 === summaryHeaderRow ? 26 : 22 }));
+      ws["!merges"] = [
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 5 } },
+        { s: { r: summaryTitleRow - 1, c: 0 }, e: { r: summaryTitleRow - 1, c: 2 } }
+      ];
+
+      const border = {
+        top: { style: "thin", color: { rgb: "D5E2DC" } },
+        bottom: { style: "thin", color: { rgb: "D5E2DC" } },
+        left: { style: "thin", color: { rgb: "D5E2DC" } },
+        right: { style: "thin", color: { rgb: "D5E2DC" } }
+      };
+      const setStyle = (r, c, style) => {
+        const cell = ws[XLSX.utils.encode_cell({ r, c })];
+        if (cell) cell.s = { ...style, border, alignment: { vertical: "center", horizontal: "center", wrapText: true, ...(style.alignment || {}) } };
+      };
+      const titleStyle = { font: { name: "Arial", sz: 15, bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "123B35" } } };
+      const headerStyle = { font: { name: "Arial", sz: 11, bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "1D6254" } } };
+      const totalStyle = { font: { name: "Arial", sz: 11, bold: true, color: { rgb: "123B35" } }, fill: { fgColor: { rgb: "E6F3ED" } } };
+      const bodyStyle = { font: { name: "Arial", sz: 10, color: { rgb: "172824" } }, fill: { fgColor: { rgb: "FFFFFF" } } };
+      for (let c = 0; c < 6; c += 1) setStyle(0, c, titleStyle);
+      for (let c = 0; c < 6; c += 1) setStyle(1, c, headerStyle);
+      for (let r = 2; r < rows.length + 2; r += 1) {
+        for (let c = 0; c < 6; c += 1) {
+          const style = { ...bodyStyle, fill: { fgColor: { rgb: r % 2 === 0 ? "F4F8F6" : "FFFFFF" } } };
+          if (c === 5) style.numFmt = '#,##0.00';
+          setStyle(r, c, style);
+        }
+      }
+      for (let c = 0; c < 3; c += 1) setStyle(summaryTitleRow - 1, c, titleStyle);
+      for (let c = 0; c < 3; c += 1) setStyle(summaryHeaderRow - 1, c, headerStyle);
+      const summaryStart = summaryHeaderRow;
+      for (let r = summaryStart; r < grandTotalRow - 1; r += 1) {
+        for (let c = 0; c < 3; c += 1) {
+          const style = { ...bodyStyle, fill: { fgColor: { rgb: r % 2 === 0 ? "F4F8F6" : "FFFFFF" } } };
+          if (c === 2) style.numFmt = '#,##0.00';
+          setStyle(r, c, style);
+        }
+      }
+      for (let c = 0; c < 3; c += 1) {
+        const style = { ...totalStyle };
+        if (c === 2) style.numFmt = '#,##0.00';
+        setStyle(grandTotalRow - 1, c, style);
+      }
+      ws["!autofilter"] = { ref: `A2:F${Math.max(2, rows.length + 2)}` };
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "تقرير الرحلات");
+      XLSX.writeFile(wb, `تقرير_رحلات_المناديب_${from}_${to}.xlsx`);
+      showToast(`تم تصدير ${rows.length} رحلة بنجاح.`, "success");
+    } catch (error) {
+      showToast(`تعذر تصدير الملف: ${error.message || "خطأ غير معروف"}`, "error", 6000);
+    }
+  }
+
+  function bindEvents() {
+    $("loginPhoneInput").addEventListener("input", syncAuthFields);
+    $("loginPhoneInput").addEventListener("change", syncAuthFields);
+    $("loginForm").addEventListener("submit", (event) => { event.preventDefault(); login(); });
+    $("openLoginFromSamplesBtn").addEventListener("click", openLogin);
+    ["backToSamplesBtn", "cancelLoginBtn"].forEach((id) => $(id).addEventListener("click", () => { setView("app"); switchTab("analysisTab"); }));
+    $("openChangePassBtn").addEventListener("click", () => { $("updatePhoneInput").value = ""; $("updatePhoneInput").placeholder = state.user?.phone || "اتركه فارغًا دون تغيير"; setView("profile"); });
+    $("closeProfileModalBtn").addEventListener("click", () => setView("app"));
+    $("saveProfileChangesBtn").addEventListener("click", saveProfile);
+    $("logoutBtn").addEventListener("click", () => {
+      if (navigator.onLine && sessionToken()) apiPost("logout", {}).catch(() => {});
+      localStorage.removeItem(CONFIG.sessionKey);
+      firstLoginMode = false;
+      state.user = null;
+      state.accounts = [];
+      state.trips = [];
+      cacheState();
+      renderHeader();
+      setView("app");
+      switchTab("analysisTab");
+      showToast("تم تسجيل الخروج.", "success");
+    });
+    document.querySelectorAll(".tab-btn").forEach((button) => button.addEventListener("click", () => switchTab(button.dataset.tab)));
+    $("tripForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!navigator.onLine) return showToast("النت فاصل. افتح النت الأول وبعد كده سجل الرحلة.", "error", 6500);
+      if (!state.user) return openLogin();
+      const date = $("tripDate").value;
+      const place = $("tripPlace").value.trim();
+      const client = $("tripClient").value.trim();
+      const allowance = Number($("tripAllowance").value);
+      if (!date || !place || !client || !Number.isFinite(allowance) || allowance < 0) return showToast("راجع بيانات الرحلة والبدل قبل التسجيل.", "warning");
+      const repPhone = isAdmin() ? $("tripRepSelect").value : state.user.phone;
+      const ok = await runMutation("add_trip", { date, place, client, allowance, repPhone }, "تم تسجيل رحلة جديدة بنجاح.", "جاري تسجيل الرحلة على النظام...");
+      if (ok) { $("tripPlace").value = ""; $("tripClient").value = ""; }
+    });
+    $("addRepForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!isAdmin()) return alert("غير مصرح.");
+      const name = $("newRepName").value.trim();
+      const phone = normalizePhone($("newRepPhone").value);
+      const role = $("newRepRole").value;
+      if (!name || phone.length < 10) return showToast("أدخل اسمًا ورقم تليفون صحيحًا.", "warning");
+      const ok = await runMutation("add_account", { name, phone, role }, "تم إضافة الحساب بنجاح.", "جاري إضافة الحساب...");
+      if (ok) { $("newRepName").value = ""; $("newRepPhone").value = ""; }
+    });
+    $("saveAllowanceBtn").addEventListener("click", async () => {
+      const allowance = Number($("defaultAllowanceInput").value);
+      if (!Number.isFinite(allowance) || allowance < 0) return showToast("أدخل قيمة بدل صحيحة.", "warning");
+      await runMutation("set_allowance", { allowance }, "تم حفظ بدل السفر الافتراضي بنجاح.", "جاري حفظ بدل السفر...");
+    });
+    ["fromDate", "toDate"].forEach((id) => $(id).addEventListener("change", () => { currentPage = 1; renderTrips(); }));
+    $("tripSearchInput").addEventListener("input", () => { currentPage = 1; renderTrips(); });
+    $("prevTripsPageBtn").addEventListener("click", () => { currentPage -= 1; renderTrips(); });
+    $("nextTripsPageBtn").addEventListener("click", () => { currentPage += 1; renderTrips(); });
+    $("exportExcelBtn").addEventListener("click", exportExcel);
+    $("syncNowBtn").addEventListener("click", () => pullState(true));
+    const today = new Date();
+    $("tripDate").value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    window.addEventListener("online", () => { setConnectionBadge(); pullState(true); });
+    window.addEventListener("offline", () => {
+      setConnectionBadge();
+      showToast("الاتصال بالإنترنت انقطع. لن يتم تسجيل أي رحلة أو تعديل قبل رجوع النت.", "error", 7000);
+    });
+  }
+
+  async function init() {
+    readCachedState();
+    bindEvents();
+    renderHeader();
+    setView("app");
+    switchTab("analysisTab");
+    if (sessionToken()) {
+      const loaded = await pullState(false);
+      if (loaded) {
+        setView("app");
+        switchTab("analysisTab");
+      } else if (!navigator.onLine) {
+        setStatus("غير متصل. لا يمكن تأكيد الجلسة أو تسجيل رحلات الآن.", "warning");
+      } else if (navigator.onLine) {
+        localStorage.removeItem(CONFIG.sessionKey);
+        state.user = null;
+        state.accounts = [];
+        state.trips = [];
+        cacheState();
+        renderHeader();
+      }
+    } else {
+      state.user = null;
+      state.accounts = [];
+      state.trips = [];
+      renderHeader();
+    }
+    if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+      navigator.serviceWorker.register("./sw.js").catch(() => {});
+    }
+    setConnectionBadge();
+  }
+
+  document.addEventListener("DOMContentLoaded", init);
+})();
