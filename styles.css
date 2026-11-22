@@ -376,11 +376,11 @@ tbody tr:nth-child(even) {
   font-size: 12px;
 }
 
-/* تصميم كارت التحاليل المطابق للصورة السابقة */
+/* تصميم كارت التحاليل واستغلال المساحة لوضوح الأرقام */
 .lab-showcase-panel {
   border: 2.5px solid var(--teal);
   border-radius: 22px;
-  padding: 22px 16px;
+  padding: 20px 12px;
   background: #0c2226;
 }
 
@@ -403,31 +403,31 @@ tbody tr:nth-child(even) {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 
 .lab-group-box {
   background: #102c31;
   border: 1.5px solid #214e56;
   border-radius: 18px;
-  padding: 12px;
-  margin-bottom: 16px;
+  padding: 10px 8px;
+  margin-bottom: 14px;
   overflow-x: auto;
 }
 
 /* الصف الأول: 4 مربعات جنب بعض */
 .lab-weights-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(72px, 1fr));
-  gap: 10px;
-  min-width: 310px;
+  grid-template-columns: repeat(4, minmax(76px, 1fr));
+  gap: 7px;
+  min-width: 316px;
 }
 
 .lab-box-card {
   background: #14353b;
   border: 1.6px solid #2c6670;
-  border-radius: 13px;
-  padding: 10px 6px;
+  border-radius: 12px;
+  padding: 8px 4px;
   text-align: center;
   align-items: center;
   justify-content: space-between;
@@ -442,14 +442,16 @@ tbody tr:nth-child(even) {
 }
 
 .lab-box-card input {
+  width: 100%;
   text-align: center;
-  font-size: clamp(15px, 3.6vw, 20px);
+  font-size: clamp(16px, 3.8vw, 21px);
   font-weight: 800;
+  letter-spacing: 0.2px;
   color: #ffffff;
-  background: #0d2429;
-  border: 1px solid #2b6770;
-  border-radius: 9px;
-  padding: 6px 4px;
+  background: #0b1f23;
+  border: 1px solid #357b87;
+  border-radius: 8px;
+  padding: 7px 3px;
 }
 
 /* الصف الثاني: 3 مربعات جنب بعض (نسبة المياه، نسبة الرواسب، نسبة الأحماض) */
