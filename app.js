@@ -14,12 +14,6 @@ const ADMIN_PHONES = [
   "01276341407"
 ];
 
-const DEFAULT_REPS = [
-  { id: "rep_1", name: "رضا ماضي", phone: "01011111111", role: "rep", password: "", avatar: "" },
-  { id: "rep_2", name: "محمد حاتم", phone: "01022222222", role: "rep", password: "", avatar: "" },
-  { id: "rep_3", name: "محمد السيد", phone: "01033333333", role: "rep", password: "", avatar: "" }
-];
-
 function normalizePhone(phone) {
   return (phone || "").toString().replace(/\D/g, "").trim();
 }
