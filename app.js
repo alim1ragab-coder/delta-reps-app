@@ -356,51 +356,26 @@ function renderTripsTable() {
     `عدد الرحلات: ${rows.length} | إجمالي بدل السفر: ${totalAllowance.toFixed(2)} جنيه`;
 }
 
-function buildRepSummaryRows(rows) {
-  const map = new Map();
-
-  getAccounts()
-    .filter((a) => a.role === "rep")
-    .forEach((rep) => {
-      map.set(rep.name, {
-        repName: rep.name,
-        daysSet: new Set(),
-        totalMoney: 0
-      });
-    });
-
-  rows.forEach((r) => {
-    const name = r.repName || "غير محدد";
-    if (!map.has(name)) {
-      map.set(name, {
-        repName: name,
-        daysSet: new Set(),
-        totalMoney: 0
-      });
-    }
-    const entry = map.get(name);
-    if (r.date) entry.daysSet.add(r.date);
-    entry.totalMoney += parseFloat(r.allowance) || 0;
-  });
-
-  const summaryList = Array.from(map.values()).map((item) => ({
-    repName: item.repName,
-    daysCount: item.daysSet.size,
-    totalMoney: item.totalMoney
-  }));
-
-  const grandDays = summaryList.reduce((acc, s) => acc + s.daysCount, 0);
-  const grandMoney = summaryList.reduce((acc, s) => acc + s.totalMoney, 0);
-
-  return { summaryList, grandDays, grandMoney };
-}
-
 function escapeHtml(val) {
   return String(val ?? "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+function cellStyle(bgHex, textHex = "0F172A", bold = false, align = "center") {
+  return {
+    font: { name: "Calibri", sz: 11, bold, color: { rgb: textHex } },
+    fill: { patternType: "solid", fgColor: { rgb: bgHex } },
+    alignment: { horizontal: align, vertical: "center" },
+    border: {
+      top: { style: "thin", color: { rgb: "64748B" } },
+      bottom: { style: "thin", color: { rgb: "64748B" } },
+      left: { style: "thin", color: { rgb: "64748B" } },
+      right: { style: "thin", color: { rgb: "64748B" } }
+    }
+  };
 }
 
 function exportTripsToExcel() {
@@ -410,99 +385,134 @@ function exportTripsToExcel() {
     return;
   }
 
+  if (typeof XLSX === "undefined") {
+    alert("تعذر تحميل مكتبة تصدير XLSX. تأكد من الاتصال بالإنترنت ثم أعد المحاولة.");
+    return;
+  }
+
   const rows = getFilteredTrips();
-  const { summaryList, grandDays, grandMoney } = buildRepSummaryRows(rows);
 
-  const mainRowsHtml = rows
-    .map(
-      (r) => `
-      <tr>
-        <td>${escapeHtml(r.timestamp)}</td>
-        <td>${escapeHtml(r.date)}</td>
-        <td>${escapeHtml(r.repName)}</td>
-        <td>${escapeHtml(r.place)}</td>
-        <td>${escapeHtml(r.client)}</td>
-      </tr>`
-    )
-    .join("");
+  const repNamesSet = new Set(
+    getAccounts()
+      .filter((a) => a.role === "rep")
+      .map((a) => a.name)
+  );
+  rows.forEach((r) => {
+    if (r.repName) repNamesSet.add(r.repName);
+  });
+  const repNames = Array.from(repNamesSet);
 
-  const summaryStartRow = Math.max(rows.length + 6, 12);
-  const summaryRowsHtml = summaryList
-    .map(
-      (s) => `
-      <tr>
-        <td colspan="5"></td>
-        <td></td>
-        <td style="background:#ed7d31;color:#000;font-weight:bold;border:1px solid #808080;text-align:right;">${escapeHtml(s.repName)}</td>
-        <td style="background:#ff0000;color:#000;font-weight:bold;border:1px solid #808080;text-align:center;">${s.daysCount}</td>
-        <td style="background:#bfbfbf;color:#000;font-weight:bold;border:1px solid #808080;text-align:center;">${Math.round(s.totalMoney)}</td>
-      </tr>`
-    )
-    .join("");
+  const ws = {};
+  ws["!views"] = [{ RTL: true }];
 
-  const spacerRowsCount = Math.max(summaryStartRow - rows.length - 1, 2);
-  const spacerRowsHtml = Array.from({ length: spacerRowsCount })
-    .map(() => `<tr><td colspan="9"></td></tr>`)
-    .join("");
+  // عناوين الجدول الرئيسي (الصف 1: A إلى F)
+  const headers = ["طابع زمني", "التاريخ", "اسم المندوب", "المكان", "اسم العميل", "بدل السفر"];
+  headers.forEach((h, colIdx) => {
+    const ref = XLSX.utils.encode_cell({ r: 0, c: colIdx });
+    ws[ref] = { t: "s", v: h, s: cellStyle("1E293B", "FFFFFF", true, "center") };
+  });
 
-  const htmlContent = `
-    <html xmlns:o="urn:schemas-microsoft-com:office:office"
-          xmlns:x="urn:schemas-microsoft-com:office:excel"
-          xmlns="http://www.w3.org/TR/REC-html40">
-    <head>
-      <meta charset="UTF-8" />
-      <!--[if gte mso 9]>
-      <xml>
-        <x:ExcelWorkbook>
-          <x:ExcelWorksheets>
-            <x:ExcelWorksheet>
-              <x:Name>Sheet1</x:Name>
-              <x:WorksheetOptions>
-                <x:DisplayRightToLeft/>
-              </x:WorksheetOptions>
-            </x:ExcelWorksheet>
-          </x:ExcelWorksheets>
-        </x:ExcelWorkbook>
-      </xml>
-      <![endif]-->
-    </head>
-    <body dir="rtl">
-      <table border="1" cellspacing="0" cellpadding="5" style="border-collapse:collapse;font-family:Calibri,Arial,sans-serif;font-size:11pt;">
-        <thead>
-          <tr style="background:#3b236b;color:#ffffff;font-weight:bold;">
-            <th style="border:1px solid #2b1852;">طابع زمني</th>
-            <th style="border:1px solid #2b1852;">التاريخ</th>
-            <th style="border:1px solid #2b1852;">اسم المندوب</th>
-            <th style="border:1px solid #2b1852;">المكان</th>
-            <th style="border:1px solid #2b1852;">اسم العميل</th>
-            <th colspan="4" style="border:1px solid #2b1852;"></th>
-          </tr>
-        </thead>
-        <tbody>
-          ${mainRowsHtml}
-          ${spacerRowsHtml}
-          ${summaryRowsHtml}
-          <tr>
-            <td colspan="5"></td>
-            <td></td>
-            <td style="background:#d9d9d9;color:#000;font-weight:bold;border:1px solid #808080;text-align:right;">TOTAL</td>
-            <td style="background:#d9eef8;color:#000;font-weight:bold;border:1px solid #808080;text-align:center;">${grandDays}</td>
-            <td style="background:#d9d9d9;color:#000;font-weight:bold;border:1px solid #808080;text-align:center;">${Math.round(grandMoney)}</td>
-          </tr>
-        </tbody>
-      </table>
-    </body>
-    </html>
-  `;
+  // بيانات الرحلات (من الصف 2)
+  rows.forEach((r, idx) => {
+    const excelRowNum = idx + 2;
+    const allowanceNum = Number(parseFloat(r.allowance) || 0);
+    const bg = idx % 2 === 0 ? "FFFFFF" : "F8FAFC";
 
-  const blob = new Blob(["\uFEFF" + htmlContent], {
-    type: "application/vnd.ms-excel;charset=utf-8;"
+    ws[`A${excelRowNum}`] = { t: "s", v: String(r.timestamp || ""), s: cellStyle(bg, "0F172A", false, "right") };
+    ws[`B${excelRowNum}`] = { t: "s", v: String(r.date || ""), s: cellStyle(bg, "0F172A", false, "center") };
+    ws[`C${excelRowNum}`] = { t: "s", v: String(r.repName || ""), s: cellStyle(bg, "0F172A", false, "right") };
+    ws[`D${excelRowNum}`] = { t: "s", v: String(r.place || ""), s: cellStyle(bg, "0F172A", false, "right") };
+    ws[`E${excelRowNum}`] = { t: "s", v: String(r.client || ""), s: cellStyle(bg, "0F172A", false, "right") };
+    ws[`F${excelRowNum}`] = {
+      t: "n",
+      v: allowanceNum,
+      z: "#,##0.00",
+      s: cellStyle(bg, "0F172A", false, "center")
+    };
+  });
+
+  const lastDataRow = Math.max(rows.length + 1, 2);
+  const summaryHeaderRow = Math.max(rows.length + 5, 14);
+  const summaryStartRow = summaryHeaderRow + 1;
+
+  // رأس جدول الملخص السفلي (أعمدة G و H و I)
+  ws[`G${summaryHeaderRow}`] = { t: "s", v: "المندوب", s: cellStyle("0F172A", "FFFFFF", true, "right") };
+  ws[`H${summaryHeaderRow}`] = { t: "s", v: "عدد الأيام", s: cellStyle("0F172A", "FFFFFF", true, "center") };
+  ws[`I${summaryHeaderRow}`] = { t: "s", v: "إجمالي البدل", s: cellStyle("0F172A", "FFFFFF", true, "center") };
+
+  // صفوف كل مندوب بمعادلات COUNTIF و SUMIF وألوان متناسقة
+  repNames.forEach((repName, i) => {
+    const rowNum = summaryStartRow + i;
+    ws[`G${rowNum}`] = {
+      t: "s",
+      v: repName,
+      s: cellStyle("FFEDD5", "7C2D12", true, "right")
+    };
+    ws[`H${rowNum}`] = {
+      t: "n",
+      f: `COUNTIF($C$2:$C$${lastDataRow},G${rowNum})`,
+      z: "0",
+      s: cellStyle("FEE2E2", "991B1B", true, "center")
+    };
+    ws[`I${rowNum}`] = {
+      t: "n",
+      f: `SUMIF($C$2:$C$${lastDataRow},G${rowNum},$F$2:$F$${lastDataRow})`,
+      z: "#,##0",
+      s: cellStyle("E2E8F0", "0F172A", true, "center")
+    };
+  });
+
+  const summaryEndRow = summaryStartRow + Math.max(repNames.length - 1, 0);
+  const totalRowNum = summaryEndRow + 1;
+
+  // صف الإجمالي الكلي TOTAL
+  ws[`G${totalRowNum}`] = { t: "s", v: "TOTAL", s: cellStyle("1E293B", "FFFFFF", true, "right") };
+  ws[`H${totalRowNum}`] = {
+    t: "n",
+    f: `SUM(H${summaryStartRow}:H${summaryEndRow})`,
+    z: "0",
+    s: cellStyle("DBEAFE", "1E3A8A", true, "center")
+  };
+  ws[`I${totalRowNum}`] = {
+    t: "n",
+    f: `SUM(I${summaryStartRow}:I${summaryEndRow})`,
+    z: "#,##0",
+    s: cellStyle("DCFCE7", "14532D", true, "center")
+  };
+
+  ws["!ref"] = `A1:I${totalRowNum}`;
+  ws["!cols"] = [
+    { wch: 24 },
+    { wch: 14 },
+    { wch: 18 },
+    { wch: 18 },
+    { wch: 18 },
+    { wch: 14 },
+    { wch: 18 },
+    { wch: 13 },
+    { wch: 15 }
+  ];
+
+  const wb = XLSX.utils.book_new();
+  wb.Workbook = { Views: [{ RTL: true }] };
+  XLSX.utils.book_append_sheet(wb, ws, "سجلات_مناديب_الدلتا");
+
+  const wbout = XLSX.write(wb, {
+    bookType: "xlsx",
+    type: "array",
+    cellStyles: true
+  });
+
+  const blob = new Blob([wbout], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
   });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `سجلات_مناديب_الدلتا_${new Date().toISOString().slice(0, 10)}.xls`;
+  a.download = `سجلات_مناديب_الدلتا_${new Date().toISOString().slice(0, 10)}.xlsx`;
+  document.body.appendChild(a);
   a.click();
+  document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
 
