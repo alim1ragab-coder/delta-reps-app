@@ -6,19 +6,19 @@
   <meta name="theme-color" content="#1e293b" />
   <title>مناديب الدلتا TAGADDOD - BY.ALI RAGAB</title>
   <link rel="manifest" href="manifest.json" />
-  <link rel="stylesheet" href="styles.css?v=20261122-fix" />
-  <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+  <link rel="stylesheet" href="styles.css?v=20261122-xlsx" />
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 </head>
 <body>
   <div id="splashScreen" class="splash-screen">
-    <img src="splash-banner.png?v=20261122-fix" alt="مناديب الدلتا TAGADDOD - BY.ALI RAGAB" class="splash-img" />
+    <img src="splash-banner.png" alt="مناديب الدلتا TAGADDOD - BY.ALI RAGAB" class="splash-img" />
     <div class="splash-caption">مناديب الدلتا TAGADDOD • BY.ALI RAGAB</div>
     <button type="button" id="skipSplashBtn" class="btn btn-outline">تخطي</button>
   </div>
 
   <header class="app-header topbar">
     <div class="brand-box">
-      <img src="logo.png?v=20261122-fix" alt="شعار التطبيق" class="brand-logo" />
+      <img src="logo.png" alt="شعار التطبيق" class="brand-logo" />
       <div>
         <h1>مناديب الدلتا TAGADDOD</h1>
         <p class="subtitle">BY.ALI RAGAB • نظام إدارة الرحلات وبدل السفر والتحاليل</p>
@@ -295,28 +295,7 @@
     تصميم وهيكلة علي رجب - 01276341407
   </footer>
 
-  <script>
-    (function () {
-      function dismissSplash() {
-        var el = document.getElementById("splashScreen");
-        if (!el) return;
-        el.style.opacity = "0";
-        el.style.pointerEvents = "none";
-        el.style.display = "none";
-      }
-
-      document.addEventListener("click", function (ev) {
-        if (ev.target && ev.target.id === "skipSplashBtn") {
-          ev.preventDefault();
-          dismissSplash();
-        }
-      });
-
-      setTimeout(dismissSplash, 2000);
-    })();
-  </script>
-
-  <script src="analysis.js?v=20261122-fix"></script>
-  <script src="app.js?v=20261122-fix"></script>
+  <script src="analysis.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
