@@ -164,7 +164,7 @@ h3 {
   margin: 3px 0 10px;
 }
 
-/* الحقول والنماذج - واضحة ومحددة جيداً */
+/* الحقول والنماذج */
 .field {
   display: flex;
   flex-direction: column;
@@ -289,6 +289,12 @@ h3 {
   transform: scale(0.99);
 }
 
+.btn-sm {
+  padding: 4px 9px;
+  font-size: 11.5px;
+  border-radius: 7px;
+}
+
 .btn-primary {
   background: #0f766e;
   color: #ffffff;
@@ -394,39 +400,111 @@ th {
   font-weight: 700;
 }
 
-/* تبويب التحاليل */
-.lab-grid {
+/* ستايل البترولي المتناسق لتبويب التحاليل */
+.card.lab-petrol-theme {
+  background: #132a2e;
+  border-color: #234e54;
+  color: #f8fafc;
+}
+
+.card.lab-petrol-theme h2,
+.card.lab-petrol-theme h3 {
+  color: #ffffff;
+}
+
+.lab-top-inputs {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
+  margin-bottom: 10px;
 }
 
-.lab-full-row {
-  grid-column: 1 / -1;
+.lab-petrol-theme .lab-top-inputs label {
+  color: #99f6e4;
 }
 
-.lab-grid label {
-  font-size: 12px;
+.lab-petrol-theme .lab-top-inputs input {
+  background: #1b3b40;
+  border-color: #2c5d63;
+  color: #ffffff;
   font-weight: 700;
-  color: #1e293b;
-  margin-bottom: 1px;
 }
 
-/* شريط واحد متناسق للنسب الثلاث */
+.lab-petrol-theme .lab-top-inputs input::placeholder {
+  color: #94a3b8;
+}
+
+.lab-petrol-theme .lab-top-inputs input:focus {
+  border-color: #2dd4bf;
+  background: #1f454b;
+  box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.2);
+}
+
+/* صف 4 مربعات جنب بعض للأوزان */
+.lab-weights-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  background: #183439;
+  border: 1px solid #2c5d63;
+  border-radius: 12px;
+  padding: 8px;
+}
+
+.lab-input-card {
+  background: #1f4349;
+  border: 1px solid #326a71;
+  border-radius: 9px;
+  padding: 7px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.lab-input-card label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #99f6e4;
+  white-space: nowrap;
+}
+
+.lab-input-card input {
+  width: 100%;
+  min-width: 0;
+  padding: 6px 4px;
+  border: 1px solid #2c5d63;
+  border-radius: 7px;
+  background: #132a2e;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.lab-input-card input:focus {
+  outline: none;
+  border-color: #2dd4bf;
+  box-shadow: 0 0 0 2px rgba(45, 212, 191, 0.22);
+}
+
+/* صف النسب الثلاث */
 .lab-results-row {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
   margin-top: 10px;
-  background: #f8fafc;
-  border: 1px solid #cbd5e1;
+  background: #183439;
+  border: 1px solid #2c5d63;
   border-radius: 12px;
   padding: 8px;
 }
 
 .lab-metric-card {
-  background: #ffffff;
-  border: 1px solid #cbd5e1;
+  background: #1f4349;
+  border: 1px solid #326a71;
   border-radius: 9px;
   padding: 8px 6px;
   text-align: center;
@@ -440,7 +518,7 @@ th {
 
 .lab-metric-label {
   font-size: 11px;
-  color: #475569;
+  color: #99f6e4;
   font-weight: 700;
   white-space: nowrap;
 }
@@ -448,16 +526,16 @@ th {
 .lab-metric-value {
   font-size: 14.5px;
   font-weight: 800;
-  color: #0f172a;
+  color: #ffffff;
 }
 
-/* كارت الخصم بالطن صغير وفي الوسط بلون أحمر هادي */
+/* كارت الخصم بالطن */
 .lab-deduction-box {
   max-width: 260px;
   width: 100%;
   margin: 10px auto 0;
-  background: #fef2f2;
-  border: 1.5px solid #fca5a5;
+  background: #3f1d24;
+  border: 1.5px solid #f87171;
   border-radius: 11px;
   padding: 8px 14px;
   display: flex;
@@ -471,13 +549,13 @@ th {
 .lab-deduction-label {
   font-size: 11.5px;
   font-weight: 700;
-  color: #991b1b;
+  color: #fecaca;
 }
 
 .lab-deduction-value {
   font-size: 15px;
   font-weight: 800;
-  color: #b91c1c;
+  color: #ffffff;
 }
 
 .lab-save-row {
@@ -486,6 +564,18 @@ th {
   flex-wrap: wrap;
   gap: 8px;
   justify-content: flex-end;
+}
+
+.lab-petrol-theme th {
+  background: #1f4349;
+  color: #99f6e4;
+  border-color: #2c5d63;
+}
+
+.lab-petrol-theme td {
+  background: #183439;
+  color: #f8fafc;
+  border-color: #2c5d63;
 }
 
 /* قائمة المناديب والمشرفين */
@@ -542,17 +632,33 @@ th {
   color: #475569;
 }
 
-/* تجاوب الشاشات الصغيرة جداً */
 @media (max-width: 480px) {
   .card {
     padding: 11px;
   }
 
   .grid-form,
-  .lab-grid,
   .filters-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 6px;
+  }
+
+  .lab-weights-row {
+    gap: 5px;
+    padding: 6px;
+  }
+
+  .lab-input-card {
+    padding: 6px 4px;
+  }
+
+  .lab-input-card label {
+    font-size: 10px;
+  }
+
+  .lab-input-card input {
+    font-size: 13px;
+    padding: 5px 2px;
   }
 
   .lab-results-row {
@@ -576,10 +682,4 @@ th {
     max-width: 230px;
     padding: 7px 12px;
   }
-}.offline-prompt {
-  margin-top: 12px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  background: #fef2f2;
-  border: 1px solid #fca5a5;
 }

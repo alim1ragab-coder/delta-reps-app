@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#132a2e" />
   <title>مناديب الدلتا TAGADDOD - BY.ALI RAGAB</title>
   <link rel="manifest" href="manifest.json" />
-  <link rel="stylesheet" href="styles.css?v=20261122-v3" />
+  <link rel="stylesheet" href="styles.css?v=20261122-ar1" />
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 </head>
 <body>
@@ -29,24 +29,25 @@
       <span id="connectionStatusBadge" class="status-badge status-online">متصل بالشبكة</span>
       <img id="headerAvatar" src="" alt="صورة المستخدم" class="header-avatar hidden" />
       <span id="userBadge" class="user-badge hidden"></span>
-      <button id="backToLoginBtn" type="button" class="btn btn-outline hidden">رجوع لتسجيل الدخول</button>
+      <button id="openLoginFromSamplesBtn" type="button" class="btn btn-teal">تسجيل الدخول</button>
+      <button id="backToSamplesBtn" type="button" class="btn btn-outline hidden">التحاليل</button>
       <button id="openChangePassBtn" type="button" class="btn btn-outline hidden">تعديل بياناتي</button>
       <button id="logoutBtn" type="button" class="btn btn-danger hidden">خروج</button>
     </div>
   </header>
 
   <main class="container">
-    <!-- شاشة تسجيل الدخول أو إنشاء كلمة سر أول مرة -->
-    <section id="authSection" class="card auth-card">
+    <!-- شاشة تسجيل الدخول -->
+    <section id="authSection" class="card auth-card hidden">
       <h2>تسجيل الدخول</h2>
-      <p class="hint">أدخل رقم تليفونك المسجل. إذا كانت هذه أول مرة لك، ستقوم بتعيين كلمة سر خاصة بك.</p>
+      <p class="hint">أدخل رقم تليفونك وكلمة السر للدخول على النظام.</p>
 
       <div class="field">
         <label for="loginPhoneInput">رقم التليفون</label>
         <input type="tel" id="loginPhoneInput" placeholder="مثال: 01012345678" />
       </div>
 
-      <div id="existingPassBox" class="field hidden">
+      <div class="field">
         <label for="loginPasswordInput">كلمة السر</label>
         <div class="password-wrap">
           <input type="password" id="loginPasswordInput" placeholder="أدخل كلمة السر" />
@@ -54,34 +55,9 @@
         </div>
       </div>
 
-      <div id="newPassBox" class="field hidden">
-        <label for="createPasswordInput">تعيين كلمة سر جديدة (4 خانات فأكثر)</label>
-        <div class="password-wrap">
-          <input type="password" id="createPasswordInput" placeholder="اختر كلمة سر" />
-          <button type="button" class="password-toggle-btn" data-target="createPasswordInput">إظهار</button>
-        </div>
-      </div>
-
-      <div id="confirmPassBox" class="field hidden">
-        <label for="confirmPasswordInput">تأكيد كلمة السر</label>
-        <div class="password-wrap">
-          <input type="password" id="confirmPasswordInput" placeholder="أعد كتابة كلمة السر" />
-          <button type="button" class="password-toggle-btn" data-target="confirmPasswordInput">إظهار</button>
-        </div>
-      </div>
-
-      <div id="avatarSetupBox" class="field hidden">
-        <label for="loginAvatarInput">صورة شخصية (اختياري)</label>
-        <input type="file" id="loginAvatarInput" accept="image/*" />
-      </div>
-
-      <div id="offlineLoginPromptBox" class="offline-prompt hidden">
-        <p class="hint">النت فاصل حالياً ومفيش اتصال لتسجيل الدخول، تحب تخش على التحاليل دلوقتي؟</p>
-        <button id="openOfflineAnalysisBtn" type="button" class="btn btn-teal">دخول على التحاليل</button>
-      </div>
-
       <div class="actions-row">
-        <button id="phoneAuthBtn" type="button" class="btn btn-primary">متابعة</button>
+        <button id="phoneAuthBtn" type="button" class="btn btn-primary">تسجيل الدخول</button>
+        <button id="cancelLoginBtn" type="button" class="btn btn-outline">رجوع للتحاليل</button>
       </div>
     </section>
 
@@ -122,17 +98,103 @@
       </div>
     </section>
 
-    <!-- التطبيق الرئيسي -->
-    <section id="appSection" class="hidden">
+    <!-- التطبيق الرئيسي (التحاليل ظاهرة فوراً بدون تسجيل دخول) -->
+    <section id="appSection">
       <nav class="tabs-bar">
-        <button type="button" class="tab-btn active" data-tab="newTripTab">تسجيل رحلة</button>
-        <button type="button" class="tab-btn" data-tab="recordsTab">سجل الرحلات</button>
-        <button type="button" class="tab-btn" data-tab="analysisTab">تحاليل العملاء</button>
-        <button type="button" class="tab-btn admin-only" data-tab="adminTab">إدارة المناديب والبدلات</button>
+        <button type="button" class="tab-btn active" data-tab="analysisTab">تحاليل العملاء</button>
+        <button type="button" class="tab-btn" data-tab="newTripTab">تسجيل رحلة</button>
+        <button type="button" class="tab-btn" data-tab="recordsTab">سجل الرحلات (حد أقصى 10)</button>
+        <button type="button" class="tab-btn admin-only hidden" data-tab="adminTab">إدارة المناديب والبدلات</button>
       </nav>
 
+      <!-- تبويب تحاليل العملاء (ظاهر في الأول ويعمل بدون إنترنت) -->
+      <div id="analysisTab" class="tab-panel active card lab-petrol-theme">
+        <h2>تحاليل العملاء (يعمل بدون إنترنت)</h2>
+
+        <div class="lab-top-inputs">
+          <div class="field">
+            <label for="labClientName">اسم العميل</label>
+            <input type="text" id="labClientName" placeholder="اسم العميل" />
+          </div>
+
+          <div class="field">
+            <label for="labAcids">الأحماض</label>
+            <input type="number" step="any" id="labAcids" placeholder="0" />
+          </div>
+        </div>
+
+        <!-- 4 مربعات جنب بعض للأوزان -->
+        <div class="lab-weights-row">
+          <div class="lab-input-card">
+            <label for="labEmptyWeight">وزن فارغ</label>
+            <input type="number" step="any" id="labEmptyWeight" placeholder="0" />
+          </div>
+
+          <div class="lab-input-card">
+            <label for="labBeforeBoil">قبل الغليان</label>
+            <input type="number" step="any" id="labBeforeBoil" placeholder="0" />
+          </div>
+
+          <div class="lab-input-card">
+            <label for="labAfterBoil">بعد الغليان</label>
+            <input type="number" step="any" id="labAfterBoil" placeholder="0" />
+          </div>
+
+          <div class="lab-input-card">
+            <label for="labSedimentWeight">وزن الرواسب</label>
+            <input type="number" step="any" id="labSedimentWeight" placeholder="0" />
+          </div>
+        </div>
+
+        <!-- تحتهم النسب الثلاث -->
+        <div class="lab-results-row">
+          <div class="lab-metric-card">
+            <div class="lab-metric-label">نسبة المياه</div>
+            <div id="resWaterPct" class="lab-metric-value">0.00%</div>
+          </div>
+
+          <div class="lab-metric-card">
+            <div class="lab-metric-label">نسبة الرواسب</div>
+            <div id="resSedimentPct" class="lab-metric-value">0.00%</div>
+          </div>
+
+          <div class="lab-metric-card">
+            <div class="lab-metric-label">نسبة الأحماض</div>
+            <div id="resAcidPct" class="lab-metric-value">0.00%</div>
+          </div>
+        </div>
+
+        <!-- تحت خالص نسبة الخصم -->
+        <div class="lab-deduction-box">
+          <div class="lab-deduction-label">الخصم بالطن (كجم/طن)</div>
+          <div id="resDeductionPerTon" class="lab-deduction-value">0</div>
+        </div>
+
+        <div class="lab-save-row">
+          <button id="saveLabAnalysisBtn" type="button" class="btn btn-teal">حفظ التحليل محلياً</button>
+          <button id="shareLabImageBtn" type="button" class="btn btn-primary">مشاركة صورة</button>
+        </div>
+
+        <h3>التحاليل المحفوظة على الجهاز</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>العميل</th>
+                <th>أحماض %</th>
+                <th>مياه %</th>
+                <th>رواسب %</th>
+                <th>خصم/طن</th>
+                <th>حذف</th>
+              </tr>
+            </thead>
+            <tbody id="savedLabAnalysisBody"></tbody>
+          </table>
+        </div>
+      </div>
+
       <!-- تبويب تسجيل رحلة -->
-      <div id="newTripTab" class="tab-panel active card">
+      <div id="newTripTab" class="tab-panel card">
         <h2>تسجيل رحلة جديدة</h2>
         <form id="tripForm" class="grid-form">
           <div class="field">
@@ -166,11 +228,11 @@
         </form>
       </div>
 
-      <!-- تبويب سجل الرحلات -->
+      <!-- تبويب سجل الرحلات (حد أقصى 10 أسطر + إمكانية الحذف) -->
       <div id="recordsTab" class="tab-panel card">
         <div class="section-header">
-          <h2>سجل الرحلات وبدل السفر</h2>
-          <button id="exportExcelBtn" type="button" class="btn btn-success admin-only">تصدير Excel (.xlsx)</button>
+          <h2>سجل الرحلات وبدل السفر (حد أقصى 10 رحلات)</h2>
+          <button id="exportExcelBtn" type="button" class="btn btn-success admin-only hidden">تصدير Excel (.xlsx)</button>
         </div>
 
         <div class="filters-row">
@@ -201,6 +263,7 @@
                 <th>المكان</th>
                 <th>العميل</th>
                 <th>البدل (جنيه)</th>
+                <th>حذف</th>
               </tr>
             </thead>
             <tbody id="recordsBody"></tbody>
@@ -208,88 +271,8 @@
         </div>
       </div>
 
-      <!-- تبويب تحاليل العملاء (يعمل بدون إنترنت) -->
-      <div id="analysisTab" class="tab-panel card">
-        <h2>تحاليل العملاء (يعمل بدون إنترنت)</h2>
-
-        <div class="lab-grid">
-          <div class="field">
-            <label for="labClientName">اسم العميل</label>
-            <input type="text" id="labClientName" placeholder="اسم العميل" />
-          </div>
-
-          <div class="field">
-            <label for="labAcids">الأحماض</label>
-            <input type="number" step="any" id="labAcids" placeholder="0" />
-          </div>
-
-          <div class="field">
-            <label for="labEmptyWeight">الوزن فارغ</label>
-            <input type="number" step="any" id="labEmptyWeight" placeholder="0" />
-          </div>
-
-          <div class="field">
-            <label for="labBeforeBoil">الوزن مليان قبل الغليان</label>
-            <input type="number" step="any" id="labBeforeBoil" placeholder="0" />
-          </div>
-
-          <div class="field">
-            <label for="labAfterBoil">الوزن بعد الغليان</label>
-            <input type="number" step="any" id="labAfterBoil" placeholder="0" />
-          </div>
-
-          <div class="field">
-            <label for="labSedimentWeight">وزن الرواسب</label>
-            <input type="number" step="any" id="labSedimentWeight" placeholder="0" />
-          </div>
-        </div>
-
-        <div class="lab-results-row">
-          <div class="lab-metric-card">
-            <div class="lab-metric-label">نسبة المياه</div>
-            <div id="resWaterPct" class="lab-metric-value">0.00%</div>
-          </div>
-
-          <div class="lab-metric-card">
-            <div class="lab-metric-label">نسبة الرواسب</div>
-            <div id="resSedimentPct" class="lab-metric-value">0.00%</div>
-          </div>
-
-          <div class="lab-metric-card">
-            <div class="lab-metric-label">نسبة الأحماض</div>
-            <div id="resAcidPct" class="lab-metric-value">0.00%</div>
-          </div>
-        </div>
-
-        <div class="lab-deduction-box">
-          <div class="lab-deduction-label">الخصم بالطن (كجم/طن)</div>
-          <div id="resDeductionPerTon" class="lab-deduction-value">0</div>
-        </div>
-
-        <div class="lab-save-row">
-          <button id="saveLabAnalysisBtn" type="button" class="btn btn-teal">حفظ التحليل محلياً</button>
-          <button id="shareLabImageBtn" type="button" class="btn btn-primary">مشاركة صورة</button>
-        </div>
-
-        <h3>التحاليل المحفوظة على الجهاز</h3>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>العميل</th>
-                <th>أحماض %</th>
-                <th>مياه %</th>
-                <th>رواسب %</th>
-                <th>خصم/طن</th>
-              </tr>
-            </thead>
-            <tbody id="savedLabAnalysisBody"></tbody>
-          </table>
-        </div>
-      </div>
-
       <!-- تبويب إدارة المناديب والبدلات -->
-      <div id="adminTab" class="tab-panel card admin-only">
+      <div id="adminTab" class="tab-panel card admin-only hidden">
         <h2>إدارة المناديب وقيمة البدل الافتراضية</h2>
 
         <div class="admin-block">
@@ -318,10 +301,29 @@
   </main>
 
   <footer class="app-footer">
-    تصميم وهيكلة علي رجب - 01276341407
+    Designed &amp; Structured by ALI RAGAB - TAGADDOD
   </footer>
 
   <script src="analysis.js"></script>
   <script src="app.js"></script>
+  <script>
+    (function () {
+      function forceHideSplash() {
+        var s = document.getElementById("splashScreen");
+        if (!s) return;
+        s.style.opacity = "0";
+        s.style.pointerEvents = "none";
+        setTimeout(function () {
+          if (s && s.parentNode) s.style.display = "none";
+        }, 250);
+      }
+      var skip = document.getElementById("skipSplashBtn");
+      if (skip) skip.addEventListener("click", forceHideSplash);
+      setTimeout(forceHideSplash, 1400);
+      window.addEventListener("load", function () {
+        setTimeout(forceHideSplash, 400);
+      });
+    })();
+  </script>
 </body>
 </html>

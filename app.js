@@ -5,6 +5,8 @@ const KEYS = {
   allowance: "delta_default_allowance_v4"
 };
 
+const MAX_TRIP_ROWS = 10;
+
 const SHEET_SYNC_URL = "https://script.google.com/macros/s/AKfycbzS2D9ENbdxUVwDoe-FkdtLl2paeSSxn3Lhm3M2hVz0J1fPnjm6-NiQgdOYUXBZRJ7u/exec";
 
 // ضع رقم تليفونك (ورقم أي مشرف أساسي آخر) هنا بالأرقام فقط
@@ -55,16 +57,18 @@ function initPasswordToggles() {
 }
 
 function getAccounts() {
-  const saved = JSON.parse(localStorage.getItem(KEYS.accounts) || "null");
-  if (Array.isArray(saved) && saved.length > 0) {
-    return saved.map((acc) => ({
-      ...acc,
-      phone: normalizePhone(acc.phone),
-      role: isConfiguredAdminPhone(acc.phone) ? "admin" : (acc.role === "admin" ? "admin" : "rep"),
-      password: String(acc.password ?? ""),
-      avatar: acc.avatar || ""
-    }));
-  }
+  try {
+    const saved = JSON.parse(localStorage.getItem(KEYS.accounts) || "null");
+    if (Array.isArray(saved) && saved.length > 0) {
+      return saved.map((acc) => ({
+        ...acc,
+        phone: normalizePhone(acc.phone),
+        role: isConfiguredAdminPhone(acc.phone) ? "admin" : (acc.role === "admin" ? "admin" : "rep"),
+        password: String(acc.password ?? ""),
+        avatar: acc.avatar || ""
+      }));
+    }
+  } catch (_) {}
 
   const initialAdmins = ADMIN_PHONES.map((p, idx) => ({
     id: `admin_${idx + 1}`,
@@ -166,14 +170,26 @@ function setAllowance(val) {
 }
 
 function getTrips() {
-  return JSON.parse(localStorage.getItem(KEYS.trips) || "[]");
+  try {
+    const parsed = JSON.parse(localStorage.getItem(KEYS.trips) || "[]");
+    return Array.isArray(parsed) ? parsed.slice(0, MAX_TRIP_ROWS) : [];
+  } catch (_) {
+    return [];
+  }
 }
 
 function setTrips(list) {
-  localStorage.setItem(KEYS.trips, JSON.stringify(list));
+  const capped = (Array.isArray(list) ? list : []).slice(0, MAX_TRIP_ROWS);
+  localStorage.setItem(KEYS.trips, JSON.stringify(capped));
 }
 
-// --- دوال المزامنة مع Google Sheets (صفوف وأعمدة) ---
+function deleteTripById(tripId) {
+  const remaining = getTrips().filter((t) => String(t.id) !== String(tripId));
+  setTrips(remaining);
+  renderTripsTable();
+  pushToSheetBackground();
+}
+
 function mergeTripsData(localTrips, remoteTrips) {
   const map = new Map();
   (Array.isArray(remoteTrips) ? remoteTrips : []).forEach((t) => {
@@ -194,11 +210,13 @@ function mergeTripsData(localTrips, remoteTrips) {
       });
     }
   });
-  return Array.from(map.values()).sort((a, b) => {
-    const idA = Number(String(a.id || "").replace(/\D/g, "")) || 0;
-    const idB = Number(String(b.id || "").replace(/\D/g, "")) || 0;
-    return idB - idA;
-  });
+  return Array.from(map.values())
+    .sort((a, b) => {
+      const idA = Number(String(a.id || "").replace(/\D/g, "")) || 0;
+      const idB = Number(String(b.id || "").replace(/\D/g, "")) || 0;
+      return idB - idA;
+    })
+    .slice(0, MAX_TRIP_ROWS);
 }
 
 function mergeAccountsData(localAccounts, remoteAccounts) {
@@ -283,8 +301,10 @@ async function pullFromSheetBackground() {
     if (user) {
       const adminFlag = isAccountAdmin(user);
       refreshRepSelect(user, adminFlag);
-      document.getElementById("tripAllowance").value = getAllowance().toFixed(2);
-      document.getElementById("defaultAllowanceInput").value = getAllowance();
+      const allowanceInput = document.getElementById("tripAllowance");
+      const defaultAllowanceInput = document.getElementById("defaultAllowanceInput");
+      if (allowanceInput) allowanceInput.value = getAllowance().toFixed(2);
+      if (defaultAllowanceInput) defaultAllowanceInput.value = getAllowance();
       renderRepsList();
       renderTripsTable();
     }
@@ -293,141 +313,93 @@ async function pullFromSheetBackground() {
     return false;
   }
 }
-// ------------------------------------------------
 
-let pendingPhone = "";
-let pendingMode = "lookup";
+async function handlePhoneAuthSubmit() {
+  const phone = normalizePhone(document.getElementById("loginPhoneInput")?.value);
+  const enteredPass = document.getElementById("loginPasswordInput")?.value || "";
 
-function preparePhoneStep() {
-  const phone = normalizePhone(document.getElementById("loginPhoneInput").value);
   if (!phone) {
     alert("من فضلك أدخل رقم التليفون.");
     return;
   }
 
+  if (!navigator.onLine) {
+    alert("النت فاصل ومفيش اتصال حالياً. يمكنك استخدام التحاليل بدون إنترنت.");
+    return;
+  }
+
+  await pullFromSheetBackground();
   const account = ensureAdminOrApprovedAccount(phone);
+
   if (!account) {
     alert("هذا الرقم غير مسجل في قائمة المناديب أو المشرفين. تواصل مع المشرف لإضافتك.");
     return;
   }
 
-  pendingPhone = phone;
-
   if (!account.password) {
-    pendingMode = "register_password";
-    document.getElementById("existingPassBox").classList.add("hidden");
-    document.getElementById("newPassBox").classList.remove("hidden");
-    document.getElementById("confirmPassBox").classList.remove("hidden");
-    document.getElementById("avatarSetupBox").classList.remove("hidden");
-    document.getElementById("phoneAuthBtn").textContent = "حفظ كلمة السر والدخول";
-  } else {
-    pendingMode = "login_password";
-    document.getElementById("newPassBox").classList.add("hidden");
-    document.getElementById("confirmPassBox").classList.add("hidden");
-    document.getElementById("avatarSetupBox").classList.add("hidden");
-    document.getElementById("existingPassBox").classList.remove("hidden");
-    document.getElementById("phoneAuthBtn").textContent = "تسجيل الدخول";
-  }
-}
-
-async function handlePhoneAuthSubmit() {
-  if (pendingMode === "lookup") {
-    await pullFromSheetBackground();
-    preparePhoneStep();
-    return;
-  }
-
-  const account = ensureAdminOrApprovedAccount(pendingPhone);
-  if (!account) {
-    alert("تعذر العثور على الحساب.");
-    return;
-  }
-
-  if (pendingMode === "register_password") {
-    const pass1 = document.getElementById("createPasswordInput").value;
-    const pass2 = document.getElementById("confirmPasswordInput").value;
-
-    if (pass1.length < 4) {
-      alert("اختر كلمة سر من 4 خانات أو أكثر.");
+    if (enteredPass.length < 4) {
+      alert("أول مرة دخول: اكتب كلمة سر من 4 خانات أو أكثر ثم اضغط تسجيل الدخول.");
       return;
     }
-    if (pass1 !== pass2) {
-      alert("كلمتا السر غير متطابقتين.");
-      return;
-    }
-
-    const avatarData = await readImageAsDataUrl(document.getElementById("loginAvatarInput"));
-    const updatedAcc = updateAccount(account.id, {
-      password: pass1,
-      avatar: avatarData || account.avatar || ""
-    });
-
+    const updatedAcc = updateAccount(account.id, { password: enteredPass });
     localStorage.setItem(KEYS.session, updatedAcc.phone);
     applyRoleUI(updatedAcc);
     pushToSheetBackground();
     return;
   }
 
-  if (pendingMode === "login_password") {
-    const enteredPass = document.getElementById("loginPasswordInput").value;
-    if (enteredPass !== account.password) {
-      alert("كلمة السر غير صحيحة.");
-      return;
-    }
-
-    localStorage.setItem(KEYS.session, account.phone);
-    applyRoleUI(account);
-    pullFromSheetBackground();
+  if (enteredPass !== account.password) {
+    alert("كلمة السر غير صحيحة.");
+    return;
   }
+
+  localStorage.setItem(KEYS.session, account.phone);
+  applyRoleUI(account);
+  pullFromSheetBackground();
 }
 
 function applyRoleUI(user) {
   const isAdmin = isAccountAdmin(user);
-  document.getElementById("authSection").classList.add("hidden");
-  document.getElementById("profileModalSection").classList.add("hidden");
-  document.getElementById("appSection").classList.remove("hidden");
-  document.getElementById("logoutBtn").classList.remove("hidden");
-  document.getElementById("openChangePassBtn").classList.remove("hidden");
+  document.getElementById("authSection")?.classList.add("hidden");
+  document.getElementById("profileModalSection")?.classList.add("hidden");
+  document.getElementById("appSection")?.classList.remove("hidden");
+  document.getElementById("openLoginFromSamplesBtn")?.classList.add("hidden");
+  document.getElementById("backToSamplesBtn")?.classList.add("hidden");
+  document.getElementById("logoutBtn")?.classList.remove("hidden");
+  document.getElementById("openChangePassBtn")?.classList.remove("hidden");
 
-  const backBtn = document.getElementById("backToLoginBtn");
-  if (backBtn) {
-    backBtn.classList.add("hidden");
-  }
-
-  document.querySelectorAll(".tab-btn").forEach((el) => {
-    el.classList.remove("hidden");
-    if (el.classList.contains("admin-only")) {
-      el.classList.toggle("hidden", !isAdmin);
-    }
+  document.querySelectorAll(".admin-only").forEach((el) => {
+    el.classList.toggle("hidden", !isAdmin);
   });
 
-  const exportBtn = document.getElementById("exportExcelBtn");
-  if (exportBtn) {
-    exportBtn.classList.toggle("hidden", !isAdmin);
-  }
-
   const avatarEl = document.getElementById("headerAvatar");
-  if (user.avatar) {
-    avatarEl.src = user.avatar;
-    avatarEl.classList.remove("hidden");
-  } else {
-    avatarEl.classList.add("hidden");
+  if (avatarEl) {
+    if (user.avatar) {
+      avatarEl.src = user.avatar;
+      avatarEl.classList.remove("hidden");
+    } else {
+      avatarEl.classList.add("hidden");
+    }
   }
 
-  document.getElementById("userBadge").classList.remove("hidden");
-  document.getElementById("userBadge").textContent =
-    `${user.name} (${user.phone}) - ${isAdmin ? "مشرف" : "مندوب"}`;
+  const badge = document.getElementById("userBadge");
+  if (badge) {
+    badge.classList.remove("hidden");
+    badge.textContent = `${user.name} (${user.phone}) - ${isAdmin ? "مشرف" : "مندوب"}`;
+  }
 
   if (!isAdmin) {
     const activeTab = document.querySelector(".tab-btn.active");
     if (activeTab && activeTab.classList.contains("admin-only")) {
-      switchTab("newTripTab");
+      switchTab("analysisTab");
     }
   }
 
   refreshRepSelect(user, isAdmin);
-  document.getElementById("tripAllowance").value = getAllowance().toFixed(2);
-  document.getElementById("defaultAllowanceInput").value = getAllowance();
+  const tripAllowanceEl = document.getElementById("tripAllowance");
+  const defaultAllowanceEl = document.getElementById("defaultAllowanceInput");
+  if (tripAllowanceEl) tripAllowanceEl.value = getAllowance().toFixed(2);
+  if (defaultAllowanceEl) defaultAllowanceEl.value = getAllowance();
   renderRepsList();
   renderTripsTable();
   if (typeof renderSavedLabAnalyses === "function") {
@@ -437,6 +409,7 @@ function applyRoleUI(user) {
 
 function refreshRepSelect(user, isAdmin) {
   const select = document.getElementById("tripRepSelect");
+  if (!select) return;
   const allAccounts = getAccounts();
   const repsOnly = allAccounts.filter((a) => !isAccountAdmin(a));
   const selectableList = isAdmin ? allAccounts : repsOnly;
@@ -480,6 +453,7 @@ function ensureRoleSelectInAddRepForm() {
 
 function renderRepsList() {
   const ul = document.getElementById("repsList");
+  if (!ul) return;
   const currentUser = getCurrentUser();
   const currentPhone = currentUser ? normalizePhone(currentUser.phone) : "";
   const members = getAccounts();
@@ -503,7 +477,7 @@ function renderRepsList() {
       <button type="button" class="btn btn-danger" data-id="${member.id}" ${isSelf ? "disabled" : ""}>${isSelf ? "حسابك" : "حذف"}</button>
     `;
     const delBtn = li.querySelector("button");
-    if (!isSelf) {
+    if (!isSelf && delBtn) {
       delBtn.addEventListener("click", () => {
         const confirmed = confirm(`هل أنت متأكد من حذف الحساب الخاص بـ "${member.name}" (${member.phone})؟`);
         if (!confirmed) return;
@@ -522,40 +496,45 @@ function renderRepsList() {
 
 function getVisibleTripsForUser(user) {
   const allTrips = getTrips();
+  if (!user) return allTrips.slice(0, MAX_TRIP_ROWS);
   if (isAccountAdmin(user)) {
-    return allTrips;
+    return allTrips.slice(0, MAX_TRIP_ROWS);
   }
   const userPhone = normalizePhone(user.phone);
   const userName = (user.name || "").trim();
 
-  return allTrips.filter((t) => {
-    const samePhone = t.ownerPhone && normalizePhone(t.ownerPhone) === userPhone;
-    const sameName = userName && (t.repName || "").trim() === userName;
-    return samePhone || sameName;
-  });
+  return allTrips
+    .filter((t) => {
+      const samePhone = t.ownerPhone && normalizePhone(t.ownerPhone) === userPhone;
+      const sameName = userName && (t.repName || "").trim() === userName;
+      return samePhone || sameName;
+    })
+    .slice(0, MAX_TRIP_ROWS);
 }
 
 function getFilteredTrips() {
   const user = getCurrentUser();
-  if (!user) return [];
-  const from = document.getElementById("fromDate").value;
-  const to = document.getElementById("toDate").value;
+  const from = document.getElementById("fromDate")?.value || "";
+  const to = document.getElementById("toDate")?.value || "";
   const searchQuery = (document.getElementById("tripSearchInput")?.value || "").trim().toLowerCase();
 
-  return getVisibleTripsForUser(user).filter((t) => {
-    if (from && t.date < from) return false;
-    if (to && t.date > to) return false;
-    if (searchQuery) {
-      const hay = `${t.repName || ""} ${t.client || ""} ${t.place || ""}`.toLowerCase();
-      if (!hay.includes(searchQuery)) return false;
-    }
-    return true;
-  });
+  return getVisibleTripsForUser(user)
+    .filter((t) => {
+      if (from && t.date < from) return false;
+      if (to && t.date > to) return false;
+      if (searchQuery) {
+        const hay = `${t.repName || ""} ${t.client || ""} ${t.place || ""}`.toLowerCase();
+        if (!hay.includes(searchQuery)) return false;
+      }
+      return true;
+    })
+    .slice(0, MAX_TRIP_ROWS);
 }
 
 function renderTripsTable() {
   const rows = getFilteredTrips();
   const tbody = document.getElementById("recordsBody");
+  if (!tbody) return;
   tbody.innerHTML = "";
 
   let totalAllowance = 0;
@@ -569,12 +548,20 @@ function renderTripsTable() {
       <td>${escapeHtml(t.place)}</td>
       <td>${escapeHtml(t.client)}</td>
       <td>${(parseFloat(t.allowance) || 0).toFixed(2)}</td>
+      <td><button type="button" class="btn btn-danger btn-sm del-trip-btn" data-id="${escapeHtml(t.id)}">حذف</button></td>
     `;
+    const delBtn = tr.querySelector(".del-trip-btn");
+    if (delBtn) {
+      delBtn.addEventListener("click", () => deleteTripById(t.id));
+    }
     tbody.appendChild(tr);
   });
 
-  document.getElementById("recordsSummary").textContent =
-    `عدد الرحلات: ${rows.length} | إجمالي بدل السفر: ${totalAllowance.toFixed(2)} جنيه`;
+  const summaryEl = document.getElementById("recordsSummary");
+  if (summaryEl) {
+    summaryEl.textContent =
+      `عدد الرحلات: ${rows.length} / ${MAX_TRIP_ROWS} | إجمالي بدل السفر: ${totalAllowance.toFixed(2)} جنيه`;
+  }
 }
 
 function escapeHtml(val) {
@@ -732,7 +719,32 @@ function exportTripsToExcel() {
   URL.revokeObjectURL(url);
 }
 
+function openLoginScreen() {
+  document.getElementById("appSection")?.classList.add("hidden");
+  document.getElementById("profileModalSection")?.classList.add("hidden");
+  document.getElementById("authSection")?.classList.remove("hidden");
+  document.getElementById("openLoginFromSamplesBtn")?.classList.add("hidden");
+  document.getElementById("backToSamplesBtn")?.classList.remove("hidden");
+}
+
+function showSamplesView() {
+  document.getElementById("authSection")?.classList.add("hidden");
+  document.getElementById("profileModalSection")?.classList.add("hidden");
+  document.getElementById("appSection")?.classList.remove("hidden");
+  document.getElementById("backToSamplesBtn")?.classList.add("hidden");
+  if (!getCurrentUser()) {
+    document.getElementById("openLoginFromSamplesBtn")?.classList.remove("hidden");
+  }
+  switchTab("analysisTab");
+}
+
 function switchTab(tabId) {
+  const needsAuth = tabId === "newTripTab" || tabId === "recordsTab" || tabId === "adminTab";
+  if (needsAuth && !getCurrentUser()) {
+    openLoginScreen();
+    return;
+  }
+
   document.querySelectorAll(".tab-btn").forEach((b) => {
     b.classList.toggle("active", b.dataset.tab === tabId);
   });
@@ -743,6 +755,7 @@ function switchTab(tabId) {
     renderSavedLabAnalyses();
   }
   if (tabId === "recordsTab") {
+    renderTripsTable();
     pullFromSheetBackground();
   }
 }
@@ -763,231 +776,213 @@ function initSplashScreen() {
   if (skipBtn) {
     skipBtn.addEventListener("click", hideSplashImmediately);
   }
-  setTimeout(hideSplashImmediately, 2000);
+  setTimeout(hideSplashImmediately, 1400);
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-  initSplashScreen();
-  initPasswordToggles();
-  updateConnectionStatusBadge();
-  window.addEventListener("online", () => {
+  try {
+    initSplashScreen();
+    initPasswordToggles();
     updateConnectionStatusBadge();
-    pullFromSheetBackground();
-    pushToSheetBackground();
-  });
-  window.addEventListener("offline", updateConnectionStatusBadge);
-
-  ensureRoleSelectInAddRepForm();
-  getAccounts();
-  document.getElementById("tripDate").value = new Date().toISOString().slice(0, 10);
-
-  document.getElementById("loginPhoneInput").addEventListener("input", () => {
-    pendingMode = "lookup";
-    pendingPhone = "";
-    document.getElementById("existingPassBox").classList.add("hidden");
-    document.getElementById("newPassBox").classList.add("hidden");
-    document.getElementById("confirmPassBox").classList.add("hidden");
-    document.getElementById("avatarSetupBox").classList.add("hidden");
-    document.getElementById("phoneAuthBtn").textContent = "متابعة";
-  });
-
-  document.getElementById("phoneAuthBtn").addEventListener("click", handlePhoneAuthSubmit);
-
-  document.getElementById("openChangePassBtn").addEventListener("click", () => {
-    document.getElementById("appSection").classList.add("hidden");
-    document.getElementById("profileModalSection").classList.remove("hidden");
-  });
-
-  document.getElementById("closeProfileModalBtn").addEventListener("click", () => {
-    document.getElementById("profileModalSection").classList.add("hidden");
-    document.getElementById("appSection").classList.remove("hidden");
-  });
-
-  document.getElementById("saveProfileChangesBtn").addEventListener("click", async () => {
-    const user = getCurrentUser();
-    if (!user) return;
-
-    const oldPhone = normalizePhone(user.phone);
-    const newPhone = normalizePhone(document.getElementById("updatePhoneInput").value);
-    const currentPass = document.getElementById("currentPassInput").value;
-    const newPass = document.getElementById("updatedPassInput").value;
-    const newAvatar = await readImageAsDataUrl(document.getElementById("updateAvatarInput"));
-
-    const patch = {};
-
-    if (newPhone && newPhone !== oldPhone) {
-      if (newPhone.length < 10) {
-        alert("من فضلك أدخل رقم تليفون صحيح.");
-        return;
-      }
-      const existingWithPhone = findAccountByPhone(newPhone);
-      if (existingWithPhone && existingWithPhone.id !== user.id) {
-        alert("رقم التليفون الجديد مسجل بالفعل لحساب آخر.");
-        return;
-      }
-      patch.phone = newPhone;
-    }
-
-    if (newPass) {
-      if (currentPass !== user.password) {
-        alert("كلمة السر الحالية غير صحيحة.");
-        return;
-      }
-      if (newPass.length < 4) {
-        alert("كلمة السر الجديدة يجب أن تكون 4 خانات أو أكثر.");
-        return;
-      }
-      patch.password = newPass;
-    }
-
-    if (newAvatar) {
-      patch.avatar = newAvatar;
-    }
-
-    if (!patch.phone && !patch.password && !patch.avatar) {
-      alert("أدخل رقم تليفون جديد، أو كلمة سر جديدة، أو اختر صورة لتحديثها.");
-      return;
-    }
-
-    const updated = updateAccount(user.id, patch);
-
-    if (patch.phone) {
-      localStorage.setItem(KEYS.session, patch.phone);
-      const updatedTrips = getTrips().map((t) =>
-        normalizePhone(t.ownerPhone) === oldPhone ? { ...t, ownerPhone: patch.phone } : t
-      );
-      setTrips(updatedTrips);
-    }
-
-    document.getElementById("updatePhoneInput").value = "";
-    document.getElementById("currentPassInput").value = "";
-    document.getElementById("updatedPassInput").value = "";
-    document.getElementById("updateAvatarInput").value = "";
-    applyRoleUI(updated);
-    pushToSheetBackground();
-    alert("تم حفظ التعديلات بنجاح.");
-  });
-
-  document.getElementById("openOfflineAnalysisBtn").addEventListener("click", () => {
-    document.getElementById("authSection").classList.add("hidden");
-    document.getElementById("appSection").classList.remove("hidden");
-    document.querySelectorAll(".tab-btn").forEach((b) => {
-      b.classList.toggle("hidden", b.dataset.tab !== "analysisTab");
+    window.addEventListener("online", () => {
+      updateConnectionStatusBadge();
+      pullFromSheetBackground();
+      pushToSheetBackground();
     });
-    switchTab("analysisTab");
-    document.getElementById("userBadge").classList.remove("hidden");
-    document.getElementById("userBadge").textContent = "وضع التحاليل (بدون نت)";
-    const backBtn = document.getElementById("backToLoginBtn");
-    if (backBtn) backBtn.classList.remove("hidden");
-  });
+    window.addEventListener("offline", updateConnectionStatusBadge);
 
-  const backToLoginBtn = document.getElementById("backToLoginBtn");
-  if (backToLoginBtn) {
-    backToLoginBtn.addEventListener("click", () => {
-      document.getElementById("appSection").classList.add("hidden");
-      document.getElementById("userBadge").classList.add("hidden");
-      backToLoginBtn.classList.add("hidden");
-      document.getElementById("authSection").classList.remove("hidden");
+    ensureRoleSelectInAddRepForm();
+    getAccounts();
+    setTrips(getTrips());
+
+    const tripDateEl = document.getElementById("tripDate");
+    if (tripDateEl) {
+      tripDateEl.value = new Date().toISOString().slice(0, 10);
+    }
+
+    document.getElementById("openLoginFromSamplesBtn")?.addEventListener("click", openLoginScreen);
+    document.getElementById("backToSamplesBtn")?.addEventListener("click", showSamplesView);
+    document.getElementById("cancelLoginBtn")?.addEventListener("click", showSamplesView);
+    document.getElementById("phoneAuthBtn")?.addEventListener("click", handlePhoneAuthSubmit);
+
+    document.getElementById("openChangePassBtn")?.addEventListener("click", () => {
+      document.getElementById("appSection")?.classList.add("hidden");
+      document.getElementById("profileModalSection")?.classList.remove("hidden");
     });
-  }
 
-  document.getElementById("logoutBtn").addEventListener("click", () => {
-    localStorage.removeItem(KEYS.session);
-    location.reload();
-  });
-
-  document.querySelectorAll(".tab-btn").forEach((btn) => {
-    btn.addEventListener("click", () => switchTab(btn.dataset.tab));
-  });
-
-  document.getElementById("tripForm").addEventListener("submit", (e) => {
-    e.preventDefault();
-    if (!navigator.onLine) {
-      alert("النت فاصل يا برنس متقدرش تسجل الرحله دلوقتي حاول تاني لمى النت يرجع");
-      return;
-    }
-
-    const user = getCurrentUser();
-    if (!user) return;
-
-    const newTrip = {
-      id: `trip_${Date.now()}`,
-      ownerPhone: user.phone,
-      timestamp: new Date().toLocaleString("ar-EG"),
-      date: document.getElementById("tripDate").value,
-      repName: document.getElementById("tripRepSelect").value,
-      place: document.getElementById("tripPlace").value.trim(),
-      client: document.getElementById("tripClient").value.trim(),
-      allowance: parseFloat(document.getElementById("tripAllowance").value) || 0
-    };
-
-    const trips = getTrips();
-    trips.unshift(newTrip);
-    setTrips(trips);
-
-    document.getElementById("tripPlace").value = "";
-    document.getElementById("tripClient").value = "";
-    renderTripsTable();
-    pushToSheetBackground();
-    alert("تم حفظ الرحلة وبدل السفر بنجاح.");
-  });
-
-  document.getElementById("addRepForm").addEventListener("submit", (e) => {
-    e.preventDefault();
-    const name = document.getElementById("newRepName").value.trim();
-    const phone = normalizePhone(document.getElementById("newRepPhone").value);
-    const roleSelect = document.getElementById("newRepRole");
-    const selectedRole = roleSelect && roleSelect.value === "admin" ? "admin" : "rep";
-
-    if (!name || !phone) {
-      alert("من فضلك أدخل الاسم ورقم التليفون.");
-      return;
-    }
-
-    const existing = findAccountByPhone(phone);
-    if (existing) {
-      alert("رقم التليفون ده مسجل بالفعل.");
-      return;
-    }
-
-    const list = getAccounts();
-    list.push({
-      id: `${selectedRole}_${Date.now()}`,
-      name,
-      phone,
-      role: selectedRole,
-      password: "",
-      avatar: ""
+    document.getElementById("closeProfileModalBtn")?.addEventListener("click", () => {
+      document.getElementById("profileModalSection")?.classList.add("hidden");
+      document.getElementById("appSection")?.classList.remove("hidden");
     });
-    setAccounts(list);
 
-    document.getElementById("newRepName").value = "";
-    document.getElementById("newRepPhone").value = "";
-    if (roleSelect) roleSelect.value = "rep";
+    document.getElementById("saveProfileChangesBtn")?.addEventListener("click", async () => {
+      const user = getCurrentUser();
+      if (!user) return;
 
-    const user = getCurrentUser();
-    if (user) refreshRepSelect(user, isAccountAdmin(user));
-    renderRepsList();
-    pushToSheetBackground();
-  });
+      const oldPhone = normalizePhone(user.phone);
+      const newPhone = normalizePhone(document.getElementById("updatePhoneInput")?.value);
+      const currentPass = document.getElementById("currentPassInput")?.value || "";
+      const newPass = document.getElementById("updatedPassInput")?.value || "";
+      const newAvatar = await readImageAsDataUrl(document.getElementById("updateAvatarInput"));
 
-  document.getElementById("saveAllowanceBtn").addEventListener("click", () => {
-    const val = document.getElementById("defaultAllowanceInput").value;
-    setAllowance(val);
-    document.getElementById("tripAllowance").value = getAllowance().toFixed(2);
-    renderTripsTable();
-    pushToSheetBackground();
-    alert("تم تحديث قيمة بدل السفر الافتراضية.");
-  });
+      const patch = {};
 
-  document.getElementById("fromDate").addEventListener("change", renderTripsTable);
-  document.getElementById("toDate").addEventListener("change", renderTripsTable);
-  document.getElementById("tripSearchInput")?.addEventListener("input", renderTripsTable);
-  document.getElementById("exportExcelBtn").addEventListener("click", exportTripsToExcel);
+      if (newPhone && newPhone !== oldPhone) {
+        if (newPhone.length < 10) {
+          alert("من فضلك أدخل رقم تليفون صحيح.");
+          return;
+        }
+        const existingWithPhone = findAccountByPhone(newPhone);
+        if (existingWithPhone && existingWithPhone.id !== user.id) {
+          alert("رقم التليفون الجديد مسجل بالفعل لحساب آخر.");
+          return;
+        }
+        patch.phone = newPhone;
+      }
 
-  const existingUser = getCurrentUser();
-  if (existingUser) {
-    applyRoleUI(existingUser);
-    pullFromSheetBackground();
+      if (newPass) {
+        if (currentPass !== user.password) {
+          alert("كلمة السر الحالية غير صحيحة.");
+          return;
+        }
+        if (newPass.length < 4) {
+          alert("كلمة السر الجديدة يجب أن تكون 4 خانات أو أكثر.");
+          return;
+        }
+        patch.password = newPass;
+      }
+
+      if (newAvatar) {
+        patch.avatar = newAvatar;
+      }
+
+      if (!patch.phone && !patch.password && !patch.avatar) {
+        alert("أدخل رقم تليفون جديد، أو كلمة سر جديدة، أو اختر صورة لتحديثها.");
+        return;
+      }
+
+      const updated = updateAccount(user.id, patch);
+
+      if (patch.phone) {
+        localStorage.setItem(KEYS.session, patch.phone);
+        const updatedTrips = getTrips().map((t) =>
+          normalizePhone(t.ownerPhone) === oldPhone ? { ...t, ownerPhone: patch.phone } : t
+        );
+        setTrips(updatedTrips);
+      }
+
+      document.getElementById("updatePhoneInput").value = "";
+      document.getElementById("currentPassInput").value = "";
+      document.getElementById("updatedPassInput").value = "";
+      document.getElementById("updateAvatarInput").value = "";
+      applyRoleUI(updated);
+      pushToSheetBackground();
+      alert("تم حفظ التعديلات بنجاح.");
+    });
+
+    document.getElementById("logoutBtn")?.addEventListener("click", () => {
+      localStorage.removeItem(KEYS.session);
+      location.reload();
+    });
+
+    document.querySelectorAll(".tab-btn").forEach((btn) => {
+      btn.addEventListener("click", () => switchTab(btn.dataset.tab));
+    });
+
+    document.getElementById("tripForm")?.addEventListener("submit", (e) => {
+      e.preventDefault();
+      if (!navigator.onLine) {
+        alert("النت فاصل يا برنس متقدرش تسجل الرحله دلوقتي حاول تاني لمى النت يرجع");
+        return;
+      }
+
+      const user = getCurrentUser();
+      if (!user) return;
+
+      const newTrip = {
+        id: `trip_${Date.now()}`,
+        ownerPhone: user.phone,
+        timestamp: new Date().toLocaleString("ar-EG"),
+        date: document.getElementById("tripDate").value,
+        repName: document.getElementById("tripRepSelect").value,
+        place: document.getElementById("tripPlace").value.trim(),
+        client: document.getElementById("tripClient").value.trim(),
+        allowance: parseFloat(document.getElementById("tripAllowance").value) || 0
+      };
+
+      const trips = getTrips();
+      trips.unshift(newTrip);
+      setTrips(trips.slice(0, MAX_TRIP_ROWS));
+
+      document.getElementById("tripPlace").value = "";
+      document.getElementById("tripClient").value = "";
+      renderTripsTable();
+      pushToSheetBackground();
+      alert("تم حفظ الرحلة وبدل السفر بنجاح.");
+    });
+
+    document.getElementById("addRepForm")?.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const name = document.getElementById("newRepName").value.trim();
+      const phone = normalizePhone(document.getElementById("newRepPhone").value);
+      const roleSelect = document.getElementById("newRepRole");
+      const selectedRole = roleSelect && roleSelect.value === "admin" ? "admin" : "rep";
+
+      if (!name || !phone) {
+        alert("من فضلك أدخل الاسم ورقم التليفون.");
+        return;
+      }
+
+      const existing = findAccountByPhone(phone);
+      if (existing) {
+        alert("رقم التليفون ده مسجل بالفعل.");
+        return;
+      }
+
+      const list = getAccounts();
+      list.push({
+        id: `${selectedRole}_${Date.now()}`,
+        name,
+        phone,
+        role: selectedRole,
+        password: "",
+        avatar: ""
+      });
+      setAccounts(list);
+
+      document.getElementById("newRepName").value = "";
+      document.getElementById("newRepPhone").value = "";
+      if (roleSelect) roleSelect.value = "rep";
+
+      const user = getCurrentUser();
+      if (user) refreshRepSelect(user, isAccountAdmin(user));
+      renderRepsList();
+      pushToSheetBackground();
+    });
+
+    document.getElementById("saveAllowanceBtn")?.addEventListener("click", () => {
+      const val = document.getElementById("defaultAllowanceInput")?.value;
+      setAllowance(val);
+      const tripAllowanceEl = document.getElementById("tripAllowance");
+      if (tripAllowanceEl) {
+        tripAllowanceEl.value = getAllowance().toFixed(2);
+      }
+      pushToSheetBackground();
+      alert("تم حفظ قيمة بدل السفر الافتراضية.");
+    });
+
+    document.getElementById("fromDate")?.addEventListener("change", renderTripsTable);
+    document.getElementById("toDate")?.addEventListener("change", renderTripsTable);
+    document.getElementById("tripSearchInput")?.addEventListener("input", renderTripsTable);
+    document.getElementById("exportExcelBtn")?.addEventListener("click", exportTripsToExcel);
+
+    showSamplesView();
+    const existingUser = getCurrentUser();
+    if (existingUser) {
+      applyRoleUI(existingUser);
+      pullFromSheetBackground();
+    }
+  } catch (err) {
+    console.error("App init error:", err);
   }
 });

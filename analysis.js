@@ -85,6 +85,12 @@ function setSavedLabAnalyses(list) {
   localStorage.setItem(LAB_STORAGE_KEY, JSON.stringify(list));
 }
 
+function deleteSavedLabAnalysis(id) {
+  const filtered = getSavedLabAnalyses().filter((item) => item.id !== id);
+  setSavedLabAnalyses(filtered);
+  renderSavedLabAnalyses();
+}
+
 function renderSavedLabAnalyses() {
   const tbody = document.getElementById("savedLabAnalysisBody");
   if (!tbody) return;
@@ -100,7 +106,12 @@ function renderSavedLabAnalyses() {
       <td>${Number(item.waterPct || 0).toFixed(2)}%</td>
       <td>${Number(item.sedimentPct || 0).toFixed(2)}%</td>
       <td>${Number(item.deductionPerTon || 0)}</td>
+      <td><button type="button" class="btn btn-danger btn-sm del-sample-btn" data-id="${escapeLabHtml(item.id)}">حذف</button></td>
     `;
+    const delBtn = tr.querySelector(".del-sample-btn");
+    if (delBtn) {
+      delBtn.addEventListener("click", () => deleteSavedLabAnalysis(item.id));
+    }
     tbody.appendChild(tr);
   });
 }
@@ -145,8 +156,7 @@ function getCurrentLabSummaryData() {
 
   const metrics = computeLabMetrics();
 
-  const inputs = [
-    { label: "الأحماض", value: fmtInputNum_("labAcids") },
+  const weights = [
     { label: "وزن فارغ", value: fmtInputNum_("labEmptyWeight") },
     { label: "قبل الغليان", value: fmtInputNum_("labBeforeBoil") },
     { label: "بعد الغليان", value: fmtInputNum_("labAfterBoil") },
@@ -155,12 +165,12 @@ function getCurrentLabSummaryData() {
 
   return {
     clientName,
+    weights,
     water: { label: "نسبة المياه", value: `${metrics.waterPct.toFixed(2)}%` },
     sediment: { label: "نسبة الرواسب", value: `${metrics.sedimentPct.toFixed(2)}%` },
     acid: { label: "نسبة الأحماض", value: `${metrics.acidPct.toFixed(2)}%` },
     deductionLabel: "الخصم بالطن (كجم/طن)",
-    deductionValue: String(metrics.deductionPerTon),
-    inputs
+    deductionValue: String(metrics.deductionPerTon)
   };
 }
 
@@ -178,8 +188,8 @@ function drawRoundedRect_(ctx, x, y, w, h, r) {
 function renderLabCardImageBlob() {
   return new Promise((resolve) => {
     const data = getCurrentLabSummaryData();
-    const width = 920;
-    const height = 560;
+    const width = 960;
+    const height = 600;
 
     const canvas = document.createElement("canvas");
     canvas.width = width;
@@ -190,122 +200,131 @@ function renderLabCardImageBlob() {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
 
+    // خلفية بيضاء نقية
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, width, height);
 
-    ctx.strokeStyle = "#cbd5e1";
+    ctx.strokeStyle = "#0f766e";
     ctx.lineWidth = 3;
-    drawRoundedRect_(ctx, 14, 14, width - 28, height - 28, 22);
+    drawRoundedRect_(ctx, 16, 16, width - 32, height - 32, 24);
     ctx.stroke();
 
-    // اسم العميل كبير في المنتصف بالأعلى
+    // اسم العميل في الأعلى
     ctx.fillStyle = "#0f172a";
-    ctx.font = "800 34px 'Segoe UI', Tahoma, sans-serif";
-    ctx.fillText(data.clientName, width / 2, 70);
+    ctx.font = "800 36px 'Segoe UI', Tahoma, sans-serif";
+    ctx.fillText(data.clientName, width / 2, 68);
 
-    // الحاوية الخارجية للنسب الثلاث
-    const groupX = 46;
-    const groupY = 112;
-    const groupW = width - 92;
-    const groupH = 142;
+    ctx.strokeStyle = "#cbd5e1";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(140, 102);
+    ctx.lineTo(width - 140, 102);
+    ctx.stroke();
+
+    // الصف الأول: 4 مربعات للأوزان
+    const wGroupX = 44;
+    const wGroupY = 122;
+    const wGroupW = width - 88;
+    const wGroupH = 124;
 
     ctx.fillStyle = "#f8fafc";
     ctx.strokeStyle = "#cbd5e1";
     ctx.lineWidth = 2;
-    drawRoundedRect_(ctx, groupX, groupY, groupW, groupH, 18);
+    drawRoundedRect_(ctx, wGroupX, wGroupY, wGroupW, wGroupH, 18);
     ctx.fill();
     ctx.stroke();
 
-    const items = [data.water, data.sediment, data.acid];
-    const gap = 16;
-    const innerPad = 16;
-    const cardW = (groupW - innerPad * 2 - gap * 2) / 3;
-    const cardH = groupH - innerPad * 2;
-    const cardY = groupY + innerPad;
+    const wCount = data.weights.length;
+    const wGap = 14;
+    const wPad = 14;
+    const wCardW = (wGroupW - wPad * 2 - wGap * (wCount - 1)) / wCount;
+    const wCardH = wGroupH - wPad * 2;
+    const wCardY = wGroupY + wPad;
 
-    items.forEach((item, index) => {
-      const cardX = groupX + groupW - innerPad - (index + 1) * cardW - index * gap;
+    data.weights.forEach((item, idx) => {
+      const cardX = wGroupX + wGroupW - wPad - (idx + 1) * wCardW - idx * wGap;
 
       ctx.fillStyle = "#ffffff";
-      ctx.strokeStyle = "#cbd5e1";
+      ctx.strokeStyle = "#94a3b8";
+      ctx.lineWidth = 1.6;
+      drawRoundedRect_(ctx, cardX, wCardY, wCardW, wCardH, 13);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = "#475569";
+      ctx.font = "700 16px 'Segoe UI', Tahoma, sans-serif";
+      ctx.fillText(item.label, cardX + wCardW / 2, wCardY + 31);
+
+      ctx.fillStyle = "#0f172a";
+      ctx.font = "800 24px 'Segoe UI', Tahoma, sans-serif";
+      ctx.fillText(item.value, cardX + wCardW / 2, wCardY + 68);
+    });
+
+    // الصف الثاني: النسب الثلاث (المياه، الرواسب، الأحماض)
+    const rGroupX = 44;
+    const rGroupY = 264;
+    const rGroupW = width - 88;
+    const rGroupH = 142;
+
+    ctx.fillStyle = "#f8fafc";
+    ctx.strokeStyle = "#cbd5e1";
+    ctx.lineWidth = 2;
+    drawRoundedRect_(ctx, rGroupX, rGroupY, rGroupW, rGroupH, 18);
+    ctx.fill();
+    ctx.stroke();
+
+    const ratios = [data.water, data.sediment, data.acid];
+    const rGap = 18;
+    const rPad = 16;
+    const rCardW = (rGroupW - rPad * 2 - rGap * 2) / 3;
+    const rCardH = rGroupH - rPad * 2;
+    const rCardY = rGroupY + rPad;
+
+    ratios.forEach((item, index) => {
+      const cardX = rGroupX + rGroupW - rPad - (index + 1) * rCardW - index * rGap;
+
+      ctx.fillStyle = "#ffffff";
+      ctx.strokeStyle = "#94a3b8";
       ctx.lineWidth = 1.8;
-      drawRoundedRect_(ctx, cardX, cardY, cardW, cardH, 14);
+      drawRoundedRect_(ctx, cardX, rCardY, rCardW, rCardH, 14);
       ctx.fill();
       ctx.stroke();
 
       ctx.fillStyle = "#475569";
       ctx.font = "700 18px 'Segoe UI', Tahoma, sans-serif";
-      ctx.fillText(item.label, cardX + cardW / 2, cardY + 36);
+      ctx.fillText(item.label, cardX + rCardW / 2, rCardY + 35);
 
-      ctx.fillStyle = "#0f172a";
-      ctx.font = "800 26px 'Segoe UI', Tahoma, sans-serif";
-      ctx.fillText(item.value, cardX + cardW / 2, cardY + 78);
+      ctx.fillStyle = "#0f766e";
+      ctx.font = "800 28px 'Segoe UI', Tahoma, sans-serif";
+      ctx.fillText(item.value, cardX + rCardW / 2, rCardY + 78);
     });
 
-    // كارت الخصم بالطن صغير في المنتصف بلون أحمر هادئ
-    const dedW = 330;
-    const dedH = 92;
+    // الصف الثالث: كارت الخصم بالطن في المنتصف
+    const dedW = 380;
+    const dedH = 100;
     const dedX = (width - dedW) / 2;
-    const dedY = 272;
+    const dedY = 424;
 
     ctx.fillStyle = "#fef2f2";
     ctx.strokeStyle = "#fca5a5";
-    ctx.lineWidth = 2.2;
+    ctx.lineWidth = 2.4;
     drawRoundedRect_(ctx, dedX, dedY, dedW, dedH, 16);
     ctx.fill();
     ctx.stroke();
 
     ctx.fillStyle = "#991b1b";
-    ctx.font = "700 17px 'Segoe UI', Tahoma, sans-serif";
-    ctx.fillText(data.deductionLabel, width / 2, dedY + 28);
+    ctx.font = "700 18px 'Segoe UI', Tahoma, sans-serif";
+    ctx.fillText(data.deductionLabel, width / 2, dedY + 30);
 
     ctx.fillStyle = "#b91c1c";
-    ctx.font = "800 27px 'Segoe UI', Tahoma, sans-serif";
-    ctx.fillText(data.deductionValue, width / 2, dedY + 64);
+    ctx.font = "800 30px 'Segoe UI', Tahoma, sans-serif";
+    ctx.fillText(data.deductionValue, width / 2, dedY + 68);
 
-    // شريط بيانات الإدخال التي بنى عليها الحساب
-    const inpGroupX = 46;
-    const inpGroupY = 382;
-    const inpGroupW = width - 92;
-    const inpGroupH = 104;
-
-    ctx.fillStyle = "#f8fafc";
-    ctx.strokeStyle = "#cbd5e1";
-    ctx.lineWidth = 1.8;
-    drawRoundedRect_(ctx, inpGroupX, inpGroupY, inpGroupW, inpGroupH, 16);
-    ctx.fill();
-    ctx.stroke();
-
-    const inpCount = data.inputs.length;
-    const inpGap = 10;
-    const inpPad = 12;
-    const inpW = (inpGroupW - inpPad * 2 - inpGap * (inpCount - 1)) / inpCount;
-    const inpH = inpGroupH - inpPad * 2;
-    const inpY = inpGroupY + inpPad;
-
-    data.inputs.forEach((inp, idx) => {
-      const inpX = inpGroupX + inpGroupW - inpPad - (idx + 1) * inpW - idx * inpGap;
-
-      ctx.fillStyle = "#ffffff";
-      ctx.strokeStyle = "#e2e8f0";
-      ctx.lineWidth = 1.4;
-      drawRoundedRect_(ctx, inpX, inpY, inpW, inpH, 11);
-      ctx.fill();
-      ctx.stroke();
-
-      ctx.fillStyle = "#475569";
-      ctx.font = "700 13.5px 'Segoe UI', Tahoma, sans-serif";
-      ctx.fillText(inp.label, inpX + inpW / 2, inpY + 26);
-
-      ctx.fillStyle = "#0f172a";
-      ctx.font = "800 18px 'Segoe UI', Tahoma, sans-serif";
-      ctx.fillText(inp.value, inpX + inpW / 2, inpY + 56);
-    });
-
-    // التذييل السفلي بخط صغير
-    ctx.fillStyle = "#64748b";
-    ctx.font = "600 13px 'Segoe UI', Tahoma, sans-serif";
-    ctx.fillText("تصميم وهيكله ALI RAGAB -TAGADDOD", width / 2, height - 26);
+    // الفوتر في الأسفل
+    ctx.direction = "ltr";
+    ctx.fillStyle = "#475569";
+    ctx.font = "600 14px 'Segoe UI', Tahoma, sans-serif";
+    ctx.fillText("Designed & Structured by ALI RAGAB - TAGADDOD", width / 2, height - 34);
 
     canvas.toBlob((blob) => resolve(blob || null), "image/png");
   });
