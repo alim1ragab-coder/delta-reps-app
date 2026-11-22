@@ -6,49 +6,10 @@
   <meta name="theme-color" content="#132a2e" />
   <title>مناديب الدلتا TAGADDOD - BY.ALI RAGAB</title>
   <link rel="manifest" href="manifest.json" />
-  <link rel="stylesheet" href="styles.css?v=20261122-ar3" />
+  <link rel="stylesheet" href="styles.css?v=20261122-ar4" />
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" defer></script>
 </head>
 <body>
-  <div id="splashScreen" class="splash-screen" style="z-index: 99999; pointer-events: auto;">
-    <img src="splash-banner.png" alt="مناديب الدلتا TAGADDOD - BY.ALI RAGAB" class="splash-img" loading="eager" decoding="async" />
-    <div class="splash-caption">مناديب الدلتا TAGADDOD • BY.ALI RAGAB</div>
-    <button type="button" id="skipSplashBtn" class="btn btn-outline" style="position: relative; z-index: 100000; cursor: pointer;">تخطي</button>
-  </div>
-  <script>
-    (function () {
-      var done = false;
-      function dismissSplashNow() {
-        if (done) return;
-        done = true;
-        var el = document.getElementById("splashScreen");
-        if (!el) return;
-        el.style.setProperty("opacity", "0", "important");
-        el.style.setProperty("pointer-events", "none", "important");
-        el.style.setProperty("visibility", "hidden", "important");
-        setTimeout(function () {
-          if (el) el.style.setProperty("display", "none", "important");
-        }, 150);
-      }
-
-      var btn = document.getElementById("skipSplashBtn");
-      if (btn) {
-        btn.addEventListener("click", function (e) {
-          e.preventDefault();
-          e.stopPropagation();
-          dismissSplashNow();
-        });
-        btn.addEventListener("touchstart", function (e) {
-          e.stopPropagation();
-          dismissSplashNow();
-        }, { passive: true });
-      }
-
-      setTimeout(dismissSplashNow, 650);
-      window.__dismissSplashNow = dismissSplashNow;
-    })();
-  </script>
-
   <header class="app-header topbar">
     <div class="brand-box">
       <img src="logo.png" alt="شعار التطبيق" class="brand-logo" />
