@@ -3,13 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0c2226">
+  <meta name="theme-color" content="#b91c1c">
   <meta name="description" content="إدارة رحلات مناديب الدلتا وبدل السفر وتحليل عينات الزيت">
   <title>مناديب الدلتا | TAGADDOD</title>
   <link rel="icon" href="icon.svg" type="image/svg+xml">
-  <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="styles.css?v=20261123-mobile">
-<base target="_blank">
+  <link rel="stylesheet" href="styles.css?v=20261123-red-slate-lab-teal">
+  <base target="_blank">
 </head>
 <body>
   <header class="topbar">
@@ -21,15 +20,16 @@
       <span id="connectionStatusBadge" class="status-badge status-offline">جارٍ التحقق...</span>
       <img id="headerAvatar" class="header-avatar hidden" alt="الصورة الشخصية">
       <span id="userBadge" class="user-badge hidden"></span>
-      <button id="openLoginFromSamplesBtn" class="secondary">تسجيل الدخول</button>
-      <button id="openChangePassBtn" class="secondary hidden">حسابي</button>
-      <button id="logoutBtn" class="danger hidden">خروج</button>
+      <button id="checkUpdateBtn" class="secondary" type="button">تحديثات</button>
+      <button id="openLoginFromSamplesBtn" class="secondary" type="button">تسجيل الدخول</button>
+      <button id="openChangePassBtn" class="secondary hidden" type="button">حسابي</button>
+      <button id="logoutBtn" class="danger hidden" type="button">خروج</button>
     </div>
   </header>
 
   <main>
     <section id="authSection" class="panel auth-panel hidden">
-      <div class="panel-head"><h2 id="authTitle">تسجيل الدخول</h2><button id="backToSamplesBtn" class="secondary">رجوع للتحليل</button></div>
+      <div class="panel-head"><h2 id="authTitle">تسجيل الدخول</h2><button id="backToSamplesBtn" class="secondary" type="button">رجوع للتحليل</button></div>
       <p id="authHint" class="muted">أدخل رقم التليفون وكلمة السر المسجلة.</p>
       <form id="loginForm" class="form-grid one-column">
         <label>رقم التليفون
@@ -56,7 +56,7 @@
     </section>
 
     <section id="profileModalSection" class="panel hidden">
-      <div class="panel-head"><h2>تعديل بيانات الحساب</h2><button id="closeProfileModalBtn" class="secondary">إغلاق</button></div>
+      <div class="panel-head"><h2>تعديل بيانات الحساب</h2><button id="closeProfileModalBtn" class="secondary" type="button">إغلاق</button></div>
       <p class="muted">اترك الحقول التي لا تريد تغييرها فارغة. تغيير كلمة السر يتطلب كلمة السر الحالية.</p>
       <form id="profileForm" class="form-grid">
         <label>رقم تليفون جديد<input id="updatePhoneInput" type="tel" inputmode="numeric" placeholder="اتركه فارغًا دون تغيير"></label>
@@ -69,10 +69,10 @@
 
     <section id="appSection">
       <nav class="tabs" aria-label="أقسام التطبيق">
-        <button class="tab-btn active" data-tab="analysisTab">تحليل العينات</button>
-        <button class="tab-btn" data-tab="newTripTab">تسجيل رحلة</button>
-        <button class="tab-btn" data-tab="recordsTab">سجل الرحلات</button>
-        <button class="tab-btn admin-only hidden" data-tab="adminTab">إدارة النظام</button>
+        <button class="tab-btn active" data-tab="analysisTab" type="button">تحليل العينات</button>
+        <button class="tab-btn" data-tab="newTripTab" type="button">تسجيل رحلة</button>
+        <button class="tab-btn" data-tab="recordsTab" type="button">سجل الرحلات</button>
+        <button class="tab-btn admin-only hidden" data-tab="adminTab" type="button">إدارة النظام</button>
       </nav>
 
       <section id="analysisTab" class="tab-panel active">
@@ -169,7 +169,7 @@
 
       <section id="recordsTab" class="tab-panel">
         <div class="panel">
-          <div class="panel-head"><h2>سجل الرحلات</h2><button id="syncNowBtn" class="secondary">تحديث من Google Sheets</button></div>
+          <div class="panel-head"><h2>سجل الرحلات</h2><button id="syncNowBtn" class="secondary" type="button">تحديث من Google Sheets</button></div>
           <div class="filters admin-only hidden">
             <label>من تاريخ<input id="fromDate" type="date"></label>
             <label>إلى تاريخ<input id="toDate" type="date"></label>
