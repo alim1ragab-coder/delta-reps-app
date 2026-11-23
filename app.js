@@ -3,521 +3,277 @@
   "use strict";
 
   const CONFIG = {
-    appVersion: "1.0.0",
-    updateCheckUrl: "https://raw.githubusercontent.com/aliragab-coder/delta-reps/main/version.json",
-    sheetUrl: "https://script.google.com/macros/s/AKfycbytRDyjemkJ88LkmPKncEMqAQ3TWEWgy0YvH9MnFJQi-OsfbATeq3HNFD4a6fuaNrSv/exec",
-    sessionKey: "delta_session_token_v5",
-    cacheKey: "delta_state_cache_v5",
-    pageSize: 10
+    appVersion: "2.0.0",
+    sheetUrl: "https://script.google.com/macros/s/AKfycbyzs3njqM7MnqMvH4vp1jh9pOUPIZDjUWoxGb6HIu9P0HtEVLfIxy40JcRXfKWGpMZ2ew/exec",
+    sessionKey: "delta_session_token_v6",
+    cacheKey: "delta_state_cache_v6",
+    pageSize: 15
   };
 
   const $ = (id) => document.getElementById(id);
-  let state = { user: null, accounts: [], trips: [], extraDays: [], allowance: 150 };
-  let currentTripPage = 1;
-  let currentExtraPage = 1;
-  let busy = false;
-  let firstLoginMode = false;
-  let lastLoginPhone = "";
-  let toastTimer = null;
+  let state = { user:null, accounts:[], trips:[], tripCount:0, extraDays:[], extraCount:0, allowance:50 };
+  let currentTripPage = 1, currentExtraPage = 1, busy = false, firstLoginMode = false, lastLoginPhone = "", toastTimer = null;
 
-  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-  const normalizePhone = (value) => {
-    let digits = String(value || "").replace(/\D/g, "");
-    if (digits.length === 10 && /^(10|11|12|15)/.test(digits)) digits = `0${digits}`;
-    return digits;
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const normalizePhone = (v) => {
+    let d = String(v||"").replace(/\D/g,"");
+    if (d.length===10 && /^(10|11|12|15)/.test(d)) d = "0"+d;
+    return d;
   };
-
-  const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
-  }[ch]));
-
-  const safeImageUrl = (raw) => {
-    const val = String(raw || "").trim();
-    if (!val) return "";
-    if (/^data:image\/(png|jpeg|jpg|webp|gif);base64,/i.test(val)) return val;
-    if (/^https?:\/\//i.test(val)) return val;
-    return "";
-  };
-
+  const escapeHtml = (v) => String(v??"").replace(/[&<>"']/g,(ch)=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
   const formatTimestamp = (raw) => {
-    const fallbackNow = new Date();
-    const d = raw ? new Date(raw) : fallbackNow;
-    if (Number.isNaN(d.getTime())) return String(raw || "");
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const dd = String(d.getDate()).padStart(2, "0");
-    const hours24 = d.getHours();
-    const period = hours24 >= 12 ? "م" : "ص";
-    const hours12 = String(hours24 % 12 || 12).padStart(2, "0");
-    const mins = String(d.getMinutes()).padStart(2, "0");
-    const secs = String(d.getSeconds()).padStart(2, "0");
-    return `${yyyy}/${mm}/${dd} - ${hours12}:${mins}:${secs} ${period}`;
+    const d = raw ? new Date(raw) : new Date();
+    if (Number.isNaN(d.getTime())) return String(raw||"");
+    const p = d.getHours()>=12?"م":"ص";
+    const h = String(d.getHours()%12||12).padStart(2,"0");
+    return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,"0")}/${String(d.getDate()).padStart(2,"0")} - ${h}:${String(d.getMinutes()).padStart(2,"0")} ${p}`;
   };
-
   const isAdmin = () => state.user?.role === "admin";
+  const isSuper = () => Boolean(state.user?.isSuper);
   const sessionToken = () => localStorage.getItem(CONFIG.sessionKey) || "";
 
-  function showToast(message, kind = "info", duration = 4200) {
+  function showToast(msg, kind="info", duration=4200) {
     let el = $("appToast");
-    if (!el) {
-      el = document.createElement("div");
-      el.id = "appToast";
-      el.className = "app-toast";
-      el.setAttribute("role", "status");
-      el.setAttribute("aria-live", "polite");
-      document.body.appendChild(el);
-    }
+    if (!el) { el = document.createElement("div"); el.id="appToast"; el.className="app-toast"; el.setAttribute("role","status"); document.body.appendChild(el); }
     clearTimeout(toastTimer);
-    el.className = `app-toast ${kind} visible`;
-    el.textContent = message;
-    if (kind !== "loading") toastTimer = setTimeout(() => el.classList.remove("visible"), duration);
+    el.className = `app-toast ${kind} visible`; el.textContent = msg;
+    if (kind !== "loading") toastTimer = setTimeout(()=>el.classList.remove("visible"), duration);
   }
   window.showAppToast = showToast;
 
-  function setStatus(message, kind = "info") {
-    const el = $("syncStatus");
-    if (el) {
-      el.textContent = message;
-      el.className = `notice ${kind}`;
-    }
-    showToast(message, kind);
+  function setStatus(msg, kind="info") {
+    const el = $("syncStatus"); if (el) { el.textContent = msg; el.className = `notice ${kind}`; }
+    showToast(msg, kind);
   }
 
   function setConnectionBadge() {
-    const badge = $("connectionStatusBadge");
-    if (!badge) return;
-    const online = navigator.onLine;
-    badge.textContent = online ? "متصل بالإنترنت" : "غير متصل";
-    badge.classList.toggle("status-online", online);
-    badge.classList.toggle("status-offline", !online);
+    const b = $("connectionStatusBadge"); if (!b) return;
+    const on = navigator.onLine;
+    b.textContent = on ? "متصل بالإنترنت" : "غير متصل";
+    b.classList.toggle("status-online", on); b.classList.toggle("status-offline", !on);
   }
 
-  function apiGet(params = {}, timeoutMs = 10000) {
+  function apiGet(params={}, timeoutMs=12000) {
     return new Promise((resolve, reject) => {
-      if (!CONFIG.sheetUrl) return reject(new Error("لم يتم ضبط رابط Google Apps Script."));
-      const callback = `__delta_cb_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      const cb = `__delta_cb_${Date.now()}_${Math.random().toString(36).slice(2)}`;
       const script = document.createElement("script");
-      const query = new URLSearchParams({ ...params, callback });
-      let settled = false;
-      const finish = (fn, value) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        delete window[callback];
-        script.remove();
-        fn(value);
-      };
-      window[callback] = (data) => finish(resolve, data);
+      const q = new URLSearchParams({ ...params, callback: cb });
+      let done = false;
+      const finish = (fn,v) => { if (done) return; done = true; clearTimeout(t); delete window[cb]; script.remove(); fn(v); };
+      window[cb] = (data)=>finish(resolve, data);
       script.onerror = () => finish(reject, new Error("تعذر الاتصال بخدمة Google Sheets."));
-      const timer = setTimeout(() => finish(reject, new Error("انتهت مهلة الاتصال بخدمة Google Sheets.")), timeoutMs);
-      script.src = `${CONFIG.sheetUrl}?${query.toString()}`;
+      const t = setTimeout(()=>finish(reject, new Error("انتهت مهلة الاتصال.")), timeoutMs);
+      script.src = `${CONFIG.sheetUrl}?${q.toString()}`;
       document.head.appendChild(script);
     });
   }
 
-  async function apiPost(action, payload = {}) {
-    if (!navigator.onLine) throw new Error("الإنترنت فاصل. افتح الإنترنت الأول وبعد كده سجل.");
+  async function apiPost(action, payload={}) {
+    if (!navigator.onLine) throw new Error("الإنترنت فاصل. افتح الإنترنت الأول.");
     if (!CONFIG.sheetUrl) throw new Error("رابط Google Sheets غير مضبوط.");
-    const requestId = (crypto.randomUUID?.() || `req_${Date.now()}_${Math.random().toString(36).slice(2)}`).replace(/[^a-zA-Z0-9_-]/g, "");
+    const requestId = (crypto.randomUUID?.()||`req_${Date.now()}_${Math.random().toString(36).slice(2)}`).replace(/[^a-zA-Z0-9_-]/g,"");
     const body = { requestId, action, payload, sessionToken: sessionToken() };
-    const controller = new AbortController();
-    const sendTimer = setTimeout(() => controller.abort(), 18000);
+    const ctrl = new AbortController();
+    const timer = setTimeout(()=>ctrl.abort(), 20000);
     try {
-      await fetch(CONFIG.sheetUrl, {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify(body),
-        signal: controller.signal
-      });
-    } catch (error) {
-      if (!navigator.onLine) throw new Error("الإنترنت فاصل. افتح الإنترنت الأول وبعد كده سجل.");
-      throw new Error("تعذر تأكيد الاتصال بخدمة التسجيل. راجع السجل قبل إعادة المحاولة حتى لا يتكرر التسجيل.");
-    } finally {
-      clearTimeout(sendTimer);
-    }
-    for (let attempt = 0; attempt < 20; attempt += 1) {
-      if (!navigator.onLine) throw new Error("انقطع الإنترنت قبل تأكيد التسجيل. راجع السجل قبل إعادة المحاولة.");
-      const result = await apiGet({ action: "result", requestId }, 5000);
-      if (result && result.pending !== true) {
-        if (!result.ok) {
-          const error = new Error(result.error || "تعذر تنفيذ العملية.");
-          error.code = result.code || "";
-          throw error;
-        }
-        return result;
+      await fetch(CONFIG.sheetUrl, { method:"POST", mode:"no-cors", headers:{"Content-Type":"text/plain;charset=utf-8"}, body:JSON.stringify(body), signal:ctrl.signal });
+    } catch (e) {
+      if (!navigator.onLine) throw new Error("الإنترنت فاصل.");
+      throw new Error("تعذر تأكيد الاتصال. راجع السجل قبل إعادة المحاولة.");
+    } finally { clearTimeout(timer); }
+    for (let i=0;i<20;i++) {
+      if (!navigator.onLine) throw new Error("انقطع الإنترنت قبل تأكيد العملية.");
+      const r = await apiGet({ action:"result", requestId }, 6000);
+      if (r && r.pending !== true) {
+        if (!r.ok) { const e = new Error(r.error||"تعذر تنفيذ العملية."); e.code = r.code||""; throw e; }
+        return r;
       }
       await sleep(450);
     }
-    throw new Error("التسجيل أُرسل لكن لم يصل تأكيد Google Sheets. راجع السجل قبل إعادة المحاولة حتى لا يتكرر التسجيل.");
+    throw new Error("لم يصل تأكيد العملية. راجع السجل قبل إعادة المحاولة.");
   }
 
-  function cacheState() {
-    try { localStorage.setItem(CONFIG.cacheKey, JSON.stringify(state)); } catch (_) {}
-  }
-
-  function readCachedState() {
-    try {
-      const saved = JSON.parse(localStorage.getItem(CONFIG.cacheKey) || "null");
-      if (saved && typeof saved === "object") state = { ...state, ...saved };
-    } catch (_) {}
-  }
-
-  const sortByDateDesc = (arr) => [...arr].sort(
-    (a, b) => String(b.date || "").localeCompare(String(a.date || "")) || String(b.id || "").localeCompare(String(a.id || ""))
-  );
-
-  function applyServerState(data) {
-    if (!data || !data.user) throw new Error("استجابة غير مكتملة من الخادم.");
-    const rawExtra = Array.isArray(data.extraDays)
-      ? data.extraDays
-      : (Array.isArray(data.extra_days) ? data.extra_days : []);
+  function cacheState() { try { localStorage.setItem(CONFIG.cacheKey, JSON.stringify(state)); } catch(_){} }
+  function readCachedState() { try { const s = JSON.parse(localStorage.getItem(CONFIG.cacheKey)||"null"); if (s) state = {...state,...s}; } catch(_){} }
+  function applyServerState(d) {
+    if (!d || !d.user) throw new Error("استجابة غير مكتملة.");
     state = {
-      user: data.user,
-      accounts: Array.isArray(data.accounts) ? data.accounts : [],
-      trips: sortByDateDesc(Array.isArray(data.trips) ? data.trips : []),
-      extraDays: sortByDateDesc(rawExtra),
-      allowance: Number.isFinite(Number(data.allowance)) ? Number(data.allowance) : 150
+      user:d.user,
+      accounts: Array.isArray(d.accounts)?d.accounts:[],
+      trips: Array.isArray(d.trips)?d.trips:[],
+      tripCount: Number(d.tripCount)||0,
+      extraDays: Array.isArray(d.extraDays)?d.extraDays:[],
+      extraCount: Number(d.extraCount)||0,
+      allowance: Number.isFinite(Number(d.allowance))?Number(d.allowance):50
     };
-    cacheState();
-    renderAll();
+    cacheState(); renderAll();
   }
 
-  async function pullState(showMessage = false) {
+  async function pullState(showMsg=false, opts={}) {
     if (!sessionToken()) return false;
-    if (!navigator.onLine) {
-      if (showMessage) setStatus("أنت غير متصل. يتم عرض آخر بيانات محفوظة على هذا الجهاز.", "warning");
-      return false;
-    }
+    if (!navigator.onLine) { if (showMsg) setStatus("غير متصل. يتم عرض آخر بيانات محفوظة.", "warning"); return false; }
     try {
-      if (showMessage) setStatus("جاري تحديث البيانات من Google Sheets...", "loading");
-      const response = await apiPost("get_state", {});
-      if (!response?.ok) throw new Error(response?.error || "تعذر تحميل البيانات.");
-      applyServerState(response.data);
-      if (showMessage) setStatus("تم تحديث البيانات من Google Sheets.", "success");
+      if (showMsg) setStatus("جاري تحديث البيانات...", "loading");
+      const tripPage = opts.tripPage ?? currentTripPage;
+      const extraPage = opts.extraPage ?? currentExtraPage;
+      const r = await apiPost("get_state", { tripPage, extraPage });
+      if (!r?.ok) throw new Error(r?.error||"تعذر تحميل البيانات.");
+      applyServerState(r.data);
+      if (showMsg) setStatus("تم التحديث.", "success");
       return true;
-    } catch (error) {
-      if (showMessage) setStatus(error.message, "error");
-      return false;
-    }
+    } catch (e) { if (showMsg) setStatus(e.message, "error"); return false; }
   }
 
-  async function runMutation(action, payload, successMessage, loadingMessage = "جاري تنفيذ العملية...") {
+  async function runMutation(action, payload, okMsg, loadingMsg="جاري التنفيذ...") {
     if (busy) return false;
-    if (!navigator.onLine) {
-      showToast("النت فاصل. افتح النت الأول وبعد كده سجل.", "error", 6000);
-      return false;
-    }
-    busy = true;
-    showToast(loadingMessage, "loading");
+    if (!navigator.onLine) { showToast("النت فاصل. افتح النت الأول.", "error", 6000); return false; }
+    busy = true; showToast(loadingMsg, "loading");
     try {
-      await apiPost(action, payload);
+      const r = await apiPost(action, payload);
       await pullState(false);
-      if (successMessage) setStatus(successMessage, "success");
-      return true;
-    } catch (error) {
-      setStatus(error.message, "error");
-      return false;
-    } finally {
-      busy = false;
-    }
-  }
-
-  async function checkForAppUpdate(manual = false) {
-    if (!CONFIG.updateCheckUrl) {
-      if (manual) showToast("لم يتم تحديد رابط ملف التحديثات بعد.", "warning");
-      return;
-    }
-    if (!navigator.onLine) {
-      if (manual) showToast("اتصل بالإنترنت أولاً للبحث عن تحديثات.", "warning");
-      return;
-    }
-    if (manual) showToast("جاري البحث عن إصدار جديد...", "loading");
-    try {
-      const sep = CONFIG.updateCheckUrl.includes("?") ? "&" : "?";
-      const res = await fetch(`${CONFIG.updateCheckUrl}${sep}t=${Date.now()}`, { cache: "no-store" });
-      if (!res.ok) throw new Error("تعذر الوصول لملف التحديثات.");
-      const data = await res.json();
-      const latestVersion = String(data.version || "").trim();
-      const apkUrl = String(data.apkUrl || "").trim();
-      const notes = String(data.notes || "").trim();
-
-      if (latestVersion && latestVersion !== CONFIG.appVersion) {
-        const msg = `يتوفر إصدار جديد (${latestVersion}) — الإصدار الحالي (${CONFIG.appVersion})${notes ? `\n\nالتحديثات:\n${notes}` : ""}\n\nهل تريد تحميل النسخة الجديدة الآن؟`;
-        if (confirm(msg) && apkUrl) {
-          window.open(apkUrl, "_blank");
-        }
-      } else if (manual) {
-        showToast(`أنت على أحدث إصدار بالفعل (v${CONFIG.appVersion}).`, "success");
-      }
-    } catch (_) {
-      if (manual) showToast("تعذر التحقق من وجود تحديثات حالياً.", "error");
-    }
+      if (okMsg) setStatus(okMsg, "success");
+      return r;
+    } catch (e) { setStatus(e.message, "error"); return false; }
+    finally { busy = false; }
   }
 
   function setView(view) {
-    ["authSection", "profileModalSection", "appSection"].forEach((id) => $(id)?.classList.add("hidden"));
-    if (view === "auth") $("authSection")?.classList.remove("hidden");
-    else if (view === "profile") $("profileModalSection")?.classList.remove("hidden");
+    ["authSection","profileModalSection","appSection"].forEach((id)=>$(id)?.classList.add("hidden"));
+    if (view==="auth") $("authSection")?.classList.remove("hidden");
+    else if (view==="profile") $("profileModalSection")?.classList.remove("hidden");
     else $("appSection")?.classList.remove("hidden");
-    $("openLoginFromSamplesBtn")?.classList.toggle("hidden", view !== "app" || Boolean(state.user));
-    $("backToSamplesBtn")?.classList.toggle("hidden", view !== "auth");
+    $("openLoginFromSamplesBtn")?.classList.toggle("hidden", view!=="app" || Boolean(state.user));
+    $("backToSamplesBtn")?.classList.toggle("hidden", view!=="auth");
   }
 
   function switchTab(tabId) {
-    if (["newTripTab", "extraDayTab", "adminTab"].includes(tabId) && !state.user) {
-      openLogin();
-      return;
-    }
-    if (tabId === "adminTab" && !isAdmin()) {
-      alert("هذه الصفحة متاحة للمشرف فقط.");
-      return;
-    }
-    document.querySelectorAll(".tab-btn").forEach((button) => button.classList.toggle("active", button.dataset.tab === tabId));
-    document.querySelectorAll(".tab-panel").forEach((panel) => panel.classList.toggle("active", panel.id === tabId));
-    if (tabId === "newTripTab") {
-      currentTripPage = 1;
-      renderTrips();
-      pullState(false);
-    }
-    if (tabId === "extraDayTab") {
-      currentExtraPage = 1;
-      renderExtraDays();
-      pullState(false);
-    }
-    if (tabId === "analysisTab" && typeof renderSavedLabAnalyses === "function") renderSavedLabAnalyses();
+    if (["newTripTab","extraDayTab","adminTab"].includes(tabId) && !state.user) { openLogin(); return; }
+    if (tabId==="adminTab" && !isAdmin()) { alert("للمشرف فقط."); return; }
+    document.querySelectorAll(".tab-btn").forEach((b)=>b.classList.toggle("active", b.dataset.tab===tabId));
+    document.querySelectorAll(".tab-panel").forEach((p)=>p.classList.toggle("active", p.id===tabId));
+    if (tabId==="newTripTab") { currentTripPage = 1; pullState(false,{tripPage:1}); }
+    if (tabId==="extraDayTab") { currentExtraPage = 1; pullState(false,{extraPage:1}); }
+    if (tabId==="analysisTab" && typeof renderSavedLabAnalyses === "function") renderSavedLabAnalyses();
   }
 
   function renderHeader() {
-    const badge = $("userBadge");
-    if (badge) {
-      badge.textContent = state.user ? `${state.user.name} · ${state.user.phone} · ${isAdmin() ? "مشرف" : "مندوب"}` : "زائر";
-      badge.classList.toggle("hidden", !state.user);
-    }
-    const avatar = $("headerAvatar");
-    if (avatar) {
-      const safeAv = safeImageUrl(state.user?.avatar);
-      avatar.src = safeAv;
-      avatar.classList.toggle("hidden", !safeAv);
-    }
+    const b = $("userBadge");
+    if (b) { b.textContent = state.user?`${state.user.name} · ${state.user.phone} · ${isAdmin()?"مشرف":"مندوب"}`:"زائر"; b.classList.toggle("hidden", !state.user); }
+    const av = $("headerAvatar");
+    if (av) { av.src = state.user?.avatar || ""; av.classList.toggle("hidden", !state.user?.avatar); }
     $("logoutBtn")?.classList.toggle("hidden", !state.user);
     $("openChangePassBtn")?.classList.toggle("hidden", !state.user);
-    document.querySelectorAll(".admin-only").forEach((el) => el.classList.toggle("hidden", !isAdmin()));
+    document.querySelectorAll(".admin-only").forEach((el)=>el.classList.toggle("hidden", !isAdmin()));
     setConnectionBadge();
   }
 
-  function renderRepSelects() {
-    if (!state.user) return;
+  function renderRepSelect() {
+    const s = $("tripRepSelect"); if (!s || !state.user) return;
     const reps = isAdmin() ? state.accounts : [state.user];
-    const optionsHtml = reps
-      .map((account) => `<option value="${escapeHtml(account.phone)}">${escapeHtml(account.name)}${account.role === "admin" ? " (مشرف)" : ""}</option>`)
-      .join("");
-
-    ["tripRepSelect", "extraDayRepSelect"].forEach((id) => {
-      const select = $(id);
-      if (!select) return;
-      select.innerHTML = optionsHtml;
-      select.disabled = !isAdmin();
-    });
+    const html = reps.map((a)=>`<option value="${escapeHtml(a.phone)}">${escapeHtml(a.name)}${a.role==="admin"?" (مشرف)":""}</option>`).join("");
+    s.innerHTML = html; s.disabled = !isAdmin();
+    const es = $("extraDayRepSelect"); if (es) { es.innerHTML = html; es.disabled = !isAdmin(); }
   }
 
   function renderReps() {
-    const list = $("repsList");
-    if (!list) return;
+    const list = $("repsList"); if (!list) return;
     list.innerHTML = "";
-    state.accounts.forEach((account) => {
+    state.accounts.forEach((a) => {
       const li = document.createElement("li");
-      const info = document.createElement("div");
-      info.className = "rep-row-info";
-      const safeAv = safeImageUrl(account.avatar);
-      if (safeAv) {
-        const img = document.createElement("img");
-        img.src = safeAv;
-        img.alt = "";
-        img.className = "rep-avatar-mini";
-        info.appendChild(img);
+      const info = document.createElement("div"); info.className = "rep-row-info";
+      const txt = document.createElement("div");
+      txt.innerHTML = `<strong>${escapeHtml(a.name)}</strong><div class="hint">${escapeHtml(a.phone)} · ${a.role==="admin"?"مشرف":"مندوب"}${a.isSuper?" · رئيسي":""}${a.firstLogin?" · لم يعيّن باسورد":""}</div>`;
+      info.appendChild(txt); li.appendChild(info);
+      const btns = document.createElement("div"); btns.className = "actions-row";
+      if (a.firstLogin && isAdmin()) {
+        const gen = document.createElement("button"); gen.type="button"; gen.className="btn btn-sm secondary"; gen.textContent="كود تفعيل";
+        gen.addEventListener("click", async () => {
+          const r = await runMutation("reset_password", { phone:a.phone }, "تم توليد كود التفعيل.", "جاري التوليد...");
+          if (r && r.activationCode) showToast(`كود ${a.name}: ${r.activationCode}`, "success", 12000);
+        });
+        btns.appendChild(gen);
       }
-      const text = document.createElement("div");
-      text.innerHTML = `<strong>${escapeHtml(account.name)}</strong><div class="hint">${escapeHtml(account.phone)} · ${account.role === "admin" ? "مشرف" : "مندوب"}</div>`;
-      info.appendChild(text);
-      li.appendChild(info);
-      const remove = document.createElement("button");
-      remove.type = "button";
-      remove.className = "btn btn-danger";
-      remove.textContent = "حذف";
-      remove.disabled = account.phone === state.user?.phone || account.role === "admin";
-      remove.title = remove.disabled ? "لا يمكن حذف حسابك أو حساب مشرف من هذه القائمة" : "حذف الحساب";
-      remove.addEventListener("click", async () => {
-        if (!confirm(`تأكيد حذف حساب ${account.name}؟`)) return;
-        await runMutation("delete_account", { phone: account.phone }, "تم حذف الحساب بنجاح.", "جاري حذف الحساب...");
+      const del = document.createElement("button");
+      del.type="button"; del.className="btn btn-danger btn-sm"; del.textContent="حذف";
+      del.disabled = a.phone===state.user?.phone || a.phone==="01276341407" || (a.role==="admin" && !isSuper());
+      del.addEventListener("click", async () => {
+        if (!confirm(`تأكيد حذف ${a.name}؟`)) return;
+        await runMutation("delete_account", { phone:a.phone }, "تم الحذف.", "جاري الحذف...");
       });
-      li.appendChild(remove);
-      list.appendChild(li);
-    });
-  }
-
-  function filterByUserAndRange(items, { fromId, toId, searchId, buildSearchText }) {
-    const from = isAdmin() ? ($(fromId)?.value || "") : "";
-    const to = isAdmin() ? ($(toId)?.value || "") : "";
-    const query = isAdmin() ? (($(searchId)?.value || "").trim().toLocaleLowerCase("ar-EG")) : "";
-    const currentPhone = normalizePhone(state.user?.phone);
-    const currentName = (state.user?.name || "").trim();
-
-    return items.filter((item) => {
-      if (!isAdmin()) {
-        const matchPhone = item.repPhone && normalizePhone(item.repPhone) === currentPhone;
-        const matchOwner = item.ownerPhone && normalizePhone(item.ownerPhone) === currentPhone;
-        const matchName = currentName && (item.repName || "").trim() === currentName;
-        if (!matchPhone && !matchOwner && !matchName) return false;
-      }
-      if (from && item.date < from) return false;
-      if (to && item.date > to) return false;
-      const text = buildSearchText(item).toLocaleLowerCase("ar-EG");
-      return !query || text.includes(query);
-    });
-  }
-
-  function getVisibleTrips() {
-    return filterByUserAndRange(state.trips, {
-      fromId: "fromDate",
-      toId: "toDate",
-      searchId: "tripSearchInput",
-      buildSearchText: (t) => `${t.repName || ""} ${t.place || ""} ${t.client || ""}`
-    });
-  }
-
-  function getVisibleExtraDays() {
-    return filterByUserAndRange(state.extraDays, {
-      fromId: "extraFromDate",
-      toId: "extraToDate",
-      searchId: "extraSearchInput",
-      buildSearchText: (d) => `${d.repName || ""} ${d.reason || d.notes || ""}`
+      btns.appendChild(del); li.appendChild(btns); list.appendChild(li);
     });
   }
 
   function renderTrips() {
-    const tbody = $("recordsBody");
-    if (!tbody) return;
-    const rows = getVisibleTrips();
-    const pages = Math.max(1, Math.ceil(rows.length / CONFIG.pageSize));
-    currentTripPage = Math.min(Math.max(1, currentTripPage), pages);
-    const visible = rows.slice((currentTripPage - 1) * CONFIG.pageSize, currentTripPage * CONFIG.pageSize);
-    tbody.innerHTML = "";
-    visible.forEach((trip) => {
+    const tb = $("recordsBody"); if (!tb) return;
+    tb.innerHTML = "";
+    state.trips.forEach((t) => {
       const tr = document.createElement("tr");
-      const tripCells = [
-        { label: "الطابع الزمني", value: formatTimestamp(trip.timestamp) },
-        { label: "التاريخ", value: trip.date || "" },
-        { label: "المندوب", value: trip.repName || "" },
-        { label: "المكان", value: trip.place || "" },
-        { label: "العميل", value: trip.client || "" },
-        { label: "بدل السفر", value: `${Number(trip.allowance || 0).toFixed(2)} ج.م` }
+      const cells = [
+        {l:"الطابع الزمني", v:formatTimestamp(t.timestamp)},
+        {l:"التاريخ", v:t.date||""},
+        {l:"المندوب", v:t.repName||""},
+        {l:"المكان", v:t.place||""},
+        {l:"العميل", v:t.client||""},
+        {l:"بدل السفر", v:`${Number(t.allowance||0).toFixed(2)} ج.م`}
       ];
-      tr.innerHTML = tripCells.map((cell) => `<td data-label="${cell.label}">${escapeHtml(cell.value)}</td>`).join("");
-
-      const cell = document.createElement("td");
-      cell.setAttribute("data-label", "إجراء");
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "btn btn-danger btn-sm";
-      button.textContent = "حذف";
-      button.addEventListener("click", async () => {
-        if (busy) return;
-        if (confirm("هل تريد حذف هذا السجل نهائيًا؟")) {
-          button.disabled = true;
-          await runMutation("delete_trip", { id: trip.id }, "تم حذف السجل بنجاح.", "جاري حذف السجل...");
-          button.disabled = false;
-        }
+      tr.innerHTML = cells.map((c)=>`<td data-label="${c.l}">${escapeHtml(c.v)}</td>`).join("");
+      const td = document.createElement("td"); td.setAttribute("data-label","إجراء");
+      const btn = document.createElement("button"); btn.type="button"; btn.className="btn btn-danger btn-sm"; btn.textContent="حذف";
+      btn.addEventListener("click", async () => {
+        if (!confirm("حذف الرحلة؟")) return;
+        await runMutation("delete_trip", { id:t.id }, "تم الحذف.", "جاري الحذف...");
       });
-      cell.appendChild(button);
-      tr.appendChild(cell);
-      tbody.appendChild(tr);
+      td.appendChild(btn); tr.appendChild(td); tb.appendChild(tr);
     });
-    if ($("recordsSummary")) {
-      $("recordsSummary").textContent = `إجمالي الرحلات: ${rows.length} | إجمالي بدل السفر: ${rows.reduce((sum, t) => sum + Number(t.allowance || 0), 0).toFixed(2)} جنيه`;
-    }
-    if ($("tripsPageInfo")) $("tripsPageInfo").textContent = `صفحة ${currentTripPage} من ${pages}`;
-    if ($("prevTripsPageBtn")) $("prevTripsPageBtn").disabled = currentTripPage <= 1 || busy;
-    if ($("nextTripsPageBtn")) $("nextTripsPageBtn").disabled = currentTripPage >= pages || busy;
-    $("tripsPaginationBar")?.classList.toggle("hidden", rows.length <= CONFIG.pageSize);
+    const pages = Math.max(1, Math.ceil(state.tripCount / CONFIG.pageSize));
+    $("recordsSummary").textContent = `إجمالي الرحلات: ${state.tripCount} | إجمالي بدل السفر: ${state.trips.reduce((s,t)=>s+Number(t.allowance||0),0).toFixed(2)} ج.م`;
+    $("tripsPageInfo").textContent = `صفحة ${currentTripPage} من ${pages}`;
+    $("prevTripsPageBtn").disabled = currentTripPage<=1;
+    $("nextTripsPageBtn").disabled = currentTripPage>=pages;
+    $("tripsPaginationBar").classList.toggle("hidden", state.tripCount<=CONFIG.pageSize);
+  }
+
+  function statusBadge(s) {
+    const map = { pending:"قيد المراجعة", approved:"مقبول", rejected:"مرفوض" };
+    return `<span class="badge badge-${s}">${map[s]||s}</span>`;
   }
 
   function renderExtraDays() {
-    const tbody = $("extraRecordsBody");
-    if (!tbody) return;
-    const rows = getVisibleExtraDays();
-    const pages = Math.max(1, Math.ceil(rows.length / CONFIG.pageSize));
-    currentExtraPage = Math.min(Math.max(1, currentExtraPage), pages);
-    const visible = rows.slice((currentExtraPage - 1) * CONFIG.pageSize, currentExtraPage * CONFIG.pageSize);
-    tbody.innerHTML = "";
-
-    visible.forEach((item) => {
+    const tb = $("extraRecordsBody"); if (!tb) return;
+    tb.innerHTML = "";
+    state.extraDays.forEach((x) => {
       const tr = document.createElement("tr");
-      const reasonText = item.reason || item.notes || "يوم عمل إضافي";
-      const baseCells = [
-        { label: "الطابع الزمني", value: formatTimestamp(item.timestamp) },
-        { label: "التاريخ", value: item.date || "" },
-        { label: "المندوب", value: item.repName || "" },
-        { label: "السبب / الملاحظات", value: reasonText }
-      ];
-      tr.innerHTML = baseCells.map((c) => `<td data-label="${c.label}">${escapeHtml(c.value)}</td>`).join("");
-
-      const proofTd = document.createElement("td");
-      proofTd.setAttribute("data-label", "صورة الإثبات");
-      const proofSrc = safeImageUrl(item.proofImage || item.proof || item.image || "");
-      if (proofSrc) {
-        const link = document.createElement("a");
-        link.href = proofSrc;
-        link.target = "_blank";
-        link.rel = "noopener noreferrer";
-        link.className = "proof-link";
-        const img = document.createElement("img");
-        img.src = proofSrc;
-        img.alt = "إثبات اليوم الإضافي";
-        img.className = "proof-thumb";
-        link.appendChild(img);
-        proofTd.appendChild(link);
-      } else {
-        proofTd.textContent = "لا يوجد";
+      tr.innerHTML = `
+        <td data-label="الطابع الزمني">${escapeHtml(formatTimestamp(x.timestamp))}</td>
+        <td data-label="التاريخ">${escapeHtml(x.date||"")}</td>
+        <td data-label="المندوب">${escapeHtml(x.repName||"")}</td>
+        <td data-label="السبب">${escapeHtml(x.reason||"")}</td>
+        <td data-label="الإثبات">${x.proofUrl?`<a href="${escapeHtml(x.proofUrl)}" target="_blank" rel="noopener" class="proof-link">عرض</a>`:"—"}</td>
+        <td data-label="الحالة">${statusBadge(x.status)}</td>
+        <td data-label="إجراء"></td>`;
+      const td = tr.querySelector("td[data-label='إجراء']");
+      if (isAdmin()) {
+        const sel = document.createElement("select");
+        sel.innerHTML = `<option value="pending">قيد المراجعة</option><option value="approved">مقبول</option><option value="rejected">مرفوض</option>`;
+        sel.value = x.status || "pending";
+        sel.addEventListener("change", async () => { await runMutation("set_extra_status", { id:x.id, status:sel.value }, "تم التحديث.", "جاري التحديث..."); });
+        td.appendChild(sel);
       }
-      tr.appendChild(proofTd);
-
-      const actionTd = document.createElement("td");
-      actionTd.setAttribute("data-label", "إجراء");
-      const delBtn = document.createElement("button");
-      delBtn.type = "button";
-      delBtn.className = "btn btn-danger btn-sm";
-      delBtn.textContent = "حذف";
-      delBtn.addEventListener("click", async () => {
-        if (busy) return;
-        if (confirm("هل تريد حذف سجل اليوم الإضافي نهائيًا؟")) {
-          delBtn.disabled = true;
-          await runMutation("delete_extra_day", { id: item.id }, "تم حذف سجل اليوم الإضافي.", "جاري حذف السجل...");
-          delBtn.disabled = false;
-        }
-      });
-      actionTd.appendChild(delBtn);
-      tr.appendChild(actionTd);
-      tbody.appendChild(tr);
+      const del = document.createElement("button"); del.type="button"; del.className="btn btn-danger btn-sm"; del.textContent="حذف"; del.style.marginInlineStart="6px";
+      del.addEventListener("click", async () => { if (!confirm("حذف السجل؟")) return; await runMutation("delete_extra_day", { id:x.id }, "تم الحذف.", "جاري الحذف..."); });
+      td.appendChild(del); tb.appendChild(tr);
     });
-
-    if ($("extraRecordsSummary")) {
-      const proofsCount = rows.filter((r) => Boolean(safeImageUrl(r.proofImage || r.proof || r.image || ""))).length;
-      $("extraRecordsSummary").textContent = `إجمالي أيام العمل الإضافية: ${rows.length} | إثباتات مرفقة: ${proofsCount}`;
-    }
-    if ($("extraPageInfo")) $("extraPageInfo").textContent = `صفحة ${currentExtraPage} من ${pages}`;
-    if ($("prevExtraPageBtn")) $("prevExtraPageBtn").disabled = currentExtraPage <= 1 || busy;
-    if ($("nextExtraPageBtn")) $("nextExtraPageBtn").disabled = currentExtraPage >= pages || busy;
-    $("extraPaginationBar")?.classList.toggle("hidden", rows.length <= CONFIG.pageSize);
+    const pages = Math.max(1, Math.ceil(state.extraCount / CONFIG.pageSize));
+    $("extraRecordsSummary").textContent = `إجمالي أيام العمل الإضافية: ${state.extraCount}`;
+    $("extraPageInfo").textContent = `صفحة ${currentExtraPage} من ${pages}`;
+    $("prevExtraPageBtn").disabled = currentExtraPage<=1;
+    $("nextExtraPageBtn").disabled = currentExtraPage>=pages;
+    $("extraPaginationBar").classList.toggle("hidden", state.extraCount<=CONFIG.pageSize);
   }
 
   function renderAll() {
-    renderHeader();
-    renderRepSelects();
-    renderReps();
-    renderTrips();
-    renderExtraDays();
+    renderHeader(); renderRepSelect(); renderReps(); renderTrips(); renderExtraDays();
     if ($("tripAllowance")) $("tripAllowance").value = Number(state.allowance).toFixed(2);
     if ($("defaultAllowanceInput")) $("defaultAllowanceInput").value = Number(state.allowance).toFixed(2);
   }
@@ -525,390 +281,206 @@
   function syncAuthFields() {
     const phone = normalizePhone($("loginPhoneInput")?.value);
     if (phone !== lastLoginPhone) { firstLoginMode = false; lastLoginPhone = phone; }
-    const account = state.accounts.find((item) => normalizePhone(item.phone) === phone);
-    const firstTime = firstLoginMode || Boolean(account && account.firstLogin);
+    const acc = state.accounts.find((a)=>normalizePhone(a.phone)===phone);
+    const firstTime = firstLoginMode || Boolean(acc && acc.firstLogin);
     $("existingPasswordBox")?.classList.toggle("hidden", firstTime);
     $("firstTimeSetupBox")?.classList.toggle("hidden", !firstTime);
-    $("authTitle").textContent = firstTime ? "تعيين كلمة سر لأول مرة" : "تسجيل الدخول";
-    $("authHint").textContent = firstTime ? "اكتب كلمة سر جديدة لحسابك." : "أدخل رقم التليفون وكلمة السر المسجلة.";
-    $("phoneAuthBtn").textContent = firstTime ? "حفظ كلمة السر والدخول" : "تسجيل الدخول";
+    $("activationCodeBox")?.classList.toggle("hidden", !firstTime);
+    $("authTitle").textContent = firstTime ? "التفعيل وتعيين كلمة السر" : "تسجيل الدخول";
+    $("authHint").textContent = firstTime ? "أدخل كود التفعيل من المشرف ثم عيّن الباسورد." : "أدخل رقم التليفون وكلمة السر.";
+    $("phoneAuthBtn").textContent = firstTime ? "تفعيل وحفظ الباسورد" : "تسجيل الدخول";
   }
 
   async function login() {
     if (busy) return;
-    if (!navigator.onLine) {
-      showToast("النت فاصل. افتح النت الأول وبعد كده سجل الدخول.", "error", 6000);
-      return;
-    }
+    if (!navigator.onLine) { showToast("النت فاصل.", "error", 6000); return; }
     const phone = normalizePhone($("loginPhoneInput").value);
     const password = $("loginPasswordInput").value;
     const newPassword = $("setupPasswordInput").value;
     const confirmPassword = $("confirmPasswordInput").value;
-    if (phone.length < 10) return alert("من فضلك أدخل رقم تليفون صحيح.");
-    const account = state.accounts.find((item) => normalizePhone(item.phone) === phone);
-    const firstTime = firstLoginMode || Boolean(account?.firstLogin);
-    if (firstTime && (newPassword.length < 4 || newPassword !== confirmPassword)) return alert("اكتب كلمة سر من 4 خانات على الأقل وتأكد من تطابقها.");
-    busy = true;
-    $("phoneAuthBtn").disabled = true;
-    showToast("جاري الدخول للحساب... برجاء الانتظار", "loading");
-    try {
-      const result = await apiPost("login", { phone, password: firstTime ? "" : password, newPassword: firstTime ? newPassword : "" });
-      localStorage.setItem(CONFIG.sessionKey, result.sessionToken);
-      $("loginPasswordInput").value = "";
-      $("setupPasswordInput").value = "";
-      $("confirmPasswordInput").value = "";
-      const loaded = await pullState(false);
-      if (!loaded) throw new Error("تم تسجيل الدخول لكن تعذر تحميل بيانات الحساب. حاول تحديث الصفحة.");
-      setView("app");
-      switchTab("analysisTab");
-      setStatus("تم تسجيل الدخول ومزامنة البيانات.", "success");
-    } catch (error) {
-      if (error.code === "FIRST_LOGIN") {
-        firstLoginMode = true;
-        syncAuthFields();
-        showToast("هذا أول دخول للحساب. عيّن كلمة سر جديدة ثم حاول الدخول.", "warning", 6500);
-      } else if (error.code === "PASSWORD_REQUIRED") {
-        firstLoginMode = false;
-        syncAuthFields();
-        showToast(error.message, "error", 6000);
-      } else {
-        showToast(error.message, "error", 6000);
-      }
-    } finally {
-      busy = false;
-      $("phoneAuthBtn").disabled = false;
+    const code = $("activationCodeInput")?.value.trim().toUpperCase();
+    if (phone.length<10) return alert("أدخل رقم صحيح.");
+    const acc = state.accounts.find((a)=>normalizePhone(a.phone)===phone);
+    const firstTime = firstLoginMode || Boolean(acc?.firstLogin);
+    if (firstTime) {
+      if (!code) return alert("أدخل كود التفعيل من المشرف.");
+      if (newPassword.length<6 || newPassword!==confirmPassword) return alert("الباسورد 6 خانات على الأقل ومتطابق.");
     }
+    busy = true; $("phoneAuthBtn").disabled = true;
+    showToast("جاري الدخول...", "loading");
+    try {
+      if (firstTime) {
+        const r1 = await apiPost("set_password_with_code", { phone, activationCode:code, newPassword });
+        if (!r1.ok) throw new Error(r1.error||"تعذر التفعيل.");
+        const r2 = await apiPost("login", { phone, password:newPassword });
+        if (!r2.ok) throw new Error(r2.error||"تعذر الدخول.");
+        localStorage.setItem(CONFIG.sessionKey, r2.sessionToken);
+      } else {
+        const r = await apiPost("login", { phone, password });
+        if (!r.ok) { const e = new Error(r.error||"تعذر الدخول."); e.code = r.code||""; throw e; }
+        localStorage.setItem(CONFIG.sessionKey, r.sessionToken);
+      }
+      ["loginPasswordInput","setupPasswordInput","confirmPasswordInput","activationCodeInput"].forEach((id)=>{ if ($(id)) $(id).value = ""; });
+      const loaded = await pullState(false);
+      if (!loaded) throw new Error("تعذر تحميل البيانات.");
+      setView("app"); switchTab("analysisTab");
+      setStatus("تم تسجيل الدخول.", "success");
+    } catch (e) {
+      if (e.code==="FIRST_LOGIN") { firstLoginMode = true; syncAuthFields(); showToast("أول دخول. أدخل كود التفعيل.", "warning", 6500); }
+      else showToast(e.message, "error", 6000);
+    } finally { busy = false; $("phoneAuthBtn").disabled = false; }
   }
 
-  function openLogin() {
-    setView("auth");
-    syncAuthFields();
-  }
+  function openLogin() { setView("auth"); syncAuthFields(); }
 
-  async function compressImageFile(file, maxDim = 900, quality = 0.65) {
+  async function readCompressedAvatar(file) {
     if (!file) return "";
-    if (!file.type.startsWith("image/")) throw new Error("الملف المختار ليس صورة.");
-    const dataUrl = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result));
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-    const image = new Image();
-    image.src = dataUrl;
-    await image.decode();
-    const scale = Math.min(1, maxDim / Math.max(image.width, image.height));
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, Math.round(image.width * scale));
-    canvas.height = Math.max(1, Math.round(image.height * scale));
-    canvas.getContext("2d").drawImage(image, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL("image/jpeg", quality);
+    if (!file.type.startsWith("image/")) throw new Error("الملف ليس صورة.");
+    const dataUrl = await new Promise((res,rej)=>{ const r = new FileReader(); r.onload = ()=>res(String(r.result)); r.onerror = rej; r.readAsDataURL(file); });
+    const img = new Image(); img.src = dataUrl; await img.decode();
+    const scale = Math.min(1, 180/Math.max(img.width,img.height));
+    const cv = document.createElement("canvas");
+    cv.width = Math.round(img.width*scale); cv.height = Math.round(img.height*scale);
+    cv.getContext("2d").drawImage(img,0,0,cv.width,cv.height);
+    return cv.toDataURL("image/jpeg",0.55);
   }
 
   async function saveProfile() {
-    if (!navigator.onLine) return showToast("النت فاصل. افتح النت الأول وبعد كده احفظ التعديلات.", "error", 6000);
+    if (!navigator.onLine) return showToast("النت فاصل.", "error", 6000);
     try {
-      showToast("جاري تجهيز البيانات...", "loading");
+      showToast("جاري التجهيز...", "loading");
       const payload = {
         phone: normalizePhone($("updatePhoneInput").value),
         currentPassword: $("currentPassInput").value,
         newPassword: $("updatedPassInput").value,
-        avatar: await compressImageFile($("updateAvatarInput").files?.[0], 180, 0.55)
+        avatar: await readCompressedAvatar($("updateAvatarInput").files?.[0])
       };
       if (!payload.phone && !payload.newPassword && !payload.avatar) return showToast("أدخل تعديلًا واحدًا على الأقل.", "warning");
-      if (payload.newPassword && payload.newPassword.length < 4) return showToast("كلمة السر الجديدة يجب أن تكون 4 خانات على الأقل.", "warning");
-      const ok = await runMutation("update_profile", payload, "تم تحديث بيانات الحساب بنجاح.", "جاري حفظ بيانات الحساب...");
-      if (ok) {
-        ["updatePhoneInput", "currentPassInput", "updatedPassInput", "updateAvatarInput"].forEach((id) => { $(id).value = ""; });
-        setView("app");
-      }
-    } catch (error) {
-      showToast(error.message || "تعذر تجهيز التعديلات.", "error", 6000);
-    }
-  }
-
-  function styleStyledWorkbook(ws, aoa, mainColsCount, summaryTitleRow, summaryHeaderRow, grandTotalRow, moneyColIndex) {
-    ws["!views"] = [{ RTL: true }];
-    ws["!rows"] = aoa.map((_, index) => ({
-      hpt: index === 0 || index + 1 === summaryTitleRow || index + 1 === summaryHeaderRow ? 26 : 22
-    }));
-    ws["!merges"] = [
-      { s: { r: 0, c: 0 }, e: { r: 0, c: mainColsCount - 1 } },
-      { s: { r: summaryTitleRow - 1, c: 0 }, e: { r: summaryTitleRow - 1, c: 2 } }
-    ];
-
-    const border = {
-      top: { style: "thin", color: { rgb: "9CA3AF" } },
-      bottom: { style: "thin", color: { rgb: "9CA3AF" } },
-      left: { style: "thin", color: { rgb: "9CA3AF" } },
-      right: { style: "thin", color: { rgb: "9CA3AF" } }
-    };
-    const setStyle = (r, c, style) => {
-      const cell = ws[XLSX.utils.encode_cell({ r, c })];
-      if (cell) {
-        cell.s = {
-          ...style,
-          border,
-          alignment: { vertical: "center", horizontal: "center", wrapText: true, ...(style.alignment || {}) }
-        };
-      }
-    };
-    const titleStyle = { font: { name: "Arial", sz: 15, bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "991B1B" } } };
-    const headerStyle = { font: { name: "Arial", sz: 11, bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "1F2937" } } };
-    const totalStyle = { font: { name: "Arial", sz: 11, bold: true, color: { rgb: "991B1B" } }, fill: { fgColor: { rgb: "FEE2E2" } } };
-    const bodyStyle = { font: { name: "Arial", sz: 10, color: { rgb: "111827" } }, fill: { fgColor: { rgb: "FFFFFF" } } };
-
-    for (let c = 0; c < mainColsCount; c += 1) setStyle(0, c, titleStyle);
-    for (let c = 0; c < mainColsCount; c += 1) setStyle(1, c, headerStyle);
-    const dataEndRow = summaryTitleRow - 3;
-    for (let r = 2; r <= dataEndRow; r += 1) {
-      for (let c = 0; c < mainColsCount; c += 1) {
-        const style = { ...bodyStyle, fill: { fgColor: { rgb: r % 2 === 0 ? "F3F4F6" : "FFFFFF" } } };
-        if (typeof moneyColIndex === "number" && c === moneyColIndex) style.numFmt = "#,##0.00";
-        setStyle(r, c, style);
-      }
-    }
-    for (let c = 0; c < 3; c += 1) setStyle(summaryTitleRow - 1, c, titleStyle);
-    for (let c = 0; c < 3; c += 1) setStyle(summaryHeaderRow - 1, c, headerStyle);
-    for (let r = summaryHeaderRow; r < grandTotalRow - 1; r += 1) {
-      for (let c = 0; c < 3; c += 1) {
-        const style = { ...bodyStyle, fill: { fgColor: { rgb: r % 2 === 0 ? "F3F4F6" : "FFFFFF" } } };
-        if (typeof moneyColIndex === "number" && c === 2) style.numFmt = "#,##0.00";
-        setStyle(r, c, style);
-      }
-    }
-    for (let c = 0; c < 3; c += 1) {
-      const style = { ...totalStyle };
-      if (typeof moneyColIndex === "number" && c === 2) style.numFmt = "#,##0.00";
-      setStyle(grandTotalRow - 1, c, style);
-    }
+      if (payload.newPassword && payload.newPassword.length<6) return showToast("الباسورد 6 خانات على الأقل.", "warning");
+      const ok = await runMutation("update_profile", payload, "تم تحديث الحساب.", "جاري الحفظ...");
+      if (ok) { ["updatePhoneInput","currentPassInput","updatedPassInput","updateAvatarInput"].forEach((id)=>{ $(id).value = ""; }); setView("app"); }
+    } catch (e) { showToast(e.message, "error", 6000); }
   }
 
   function exportExcel() {
-    if (!isAdmin()) return showToast("تصدير Excel متاح للمشرف فقط.", "error");
-    if (typeof XLSX === "undefined") return showToast("مكتبة Excel لم تُحمّل. تأكد من الإنترنت ثم حاول مرة أخرى.", "error", 6000);
-    const from = $("fromDate").value;
-    const to = $("toDate").value;
-    if (!from || !to) return showToast("حدد تاريخ البداية والنهاية قبل التصدير.", "warning");
-    if (from > to) return showToast("تاريخ البداية يجب ألا يكون بعد تاريخ النهاية.", "warning");
-
-    showToast("جاري تجهيز ملف Excel وتنسيق الجداول...", "loading");
+    if (!isAdmin()) return showToast("للمشرف فقط.", "error");
+    if (typeof XLSX==="undefined") return showToast("مكتبة Excel لم تُحمّل.", "error", 6000);
+    const from = $("fromDate").value, to = $("toDate").value;
+    if (!from || !to) return showToast("حدد تاريخ البداية والنهاية.", "warning");
+    if (from > to) return showToast("تاريخ البداية بعد النهاية.", "warning");
+    showToast("جاري تجهيز الملف...", "loading");
     try {
-      const rows = getVisibleTrips();
-      const repNames = [...new Set(rows.map((trip) => trip.repName).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ar"));
-      const totalAllowance = rows.reduce((sum, trip) => sum + Number(trip.allowance || 0), 0);
+      const rows = state.trips.filter((t)=>(!from||t.date>=from) && (!to||t.date<=to));
+      const repNames = [...new Set(rows.map((t)=>t.repName).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"ar"));
+      const total = rows.reduce((s,t)=>s+Number(t.allowance||0),0);
       const aoa = [
-        ["تقرير رحلات مناديب الدلتا - TAGADDOD", "", "", "", "", ""],
-        ["الطابع الزمني", "تاريخ الرحلة", "اسم المندوب", "المكان / المحافظة", "اسم العميل", "بدل السفر (ج.م)"],
-        ...rows.map((trip) => [
-          formatTimestamp(trip.timestamp),
-          trip.date || "",
-          trip.repName || "",
-          trip.place || "",
-          trip.client || "",
-          Number(trip.allowance || 0)
-        ])
+        ["تقرير رحلات مناديب الدلتا - TAGADDOD","","","","",""],
+        ["الطابع الزمني","تاريخ الرحلة","اسم المندوب","المكان / المحافظة","اسم العميل","بدل السفر (ج.م)"],
+        ...rows.map((t)=>[formatTimestamp(t.timestamp), t.date||"", t.repName||"", t.place||"", t.client||"", Number(t.allowance||0)]),
+        [], ["ملخص بدل السفر حسب المندوب","",""],
+        ["اسم المندوب","عدد الرحلات","إجمالي بدل السفر (ج.م)"]
       ];
-      const summaryTitleRow = aoa.length + 2;
-      aoa.push([], ["ملخص بدل السفر حسب المندوب", "", ""]);
-      const summaryHeaderRow = aoa.length + 1;
-      aoa.push(["اسم المندوب", "عدد الرحلات", "إجمالي بدل السفر (ج.م)"]);
-      repNames.forEach((name) => {
-        const own = rows.filter((trip) => trip.repName === name);
-        aoa.push([name, own.length, own.reduce((sum, trip) => sum + Number(trip.allowance || 0), 0)]);
-      });
-      const grandTotalRow = aoa.length + 1;
-      aoa.push(["الإجمالي العام", rows.length, totalAllowance]);
-
+      repNames.forEach((n)=>{ const own = rows.filter((t)=>t.repName===n); aoa.push([n, own.length, own.reduce((s,t)=>s+Number(t.allowance||0),0)]); });
+      aoa.push(["الإجمالي العام", rows.length, total]);
       const ws = XLSX.utils.aoa_to_sheet(aoa);
-      ws["!cols"] = [{ wch: 24 }, { wch: 15 }, { wch: 23 }, { wch: 23 }, { wch: 27 }, { wch: 19 }];
-      styleStyledWorkbook(ws, aoa, 6, summaryTitleRow, summaryHeaderRow, grandTotalRow, 5);
-      ws["!autofilter"] = { ref: `A2:F${Math.max(2, rows.length + 2)}` };
-
+      ws["!views"] = [{ RTL:true }];
+      ws["!cols"] = [{wch:24},{wch:15},{wch:23},{wch:23},{wch:27},{wch:19}];
+      const border = { top:{style:"thin",color:{rgb:"9CA3AF"}}, bottom:{style:"thin",color:{rgb:"9CA3AF"}}, left:{style:"thin",color:{rgb:"9CA3AF"}}, right:{style:"thin",color:{rgb:"9CA3AF"}} };
+      const setStyle = (r,c,s)=>{ const cell = ws[XLSX.utils.encode_cell({r,c})]; if (cell) cell.s = {...s, border, alignment:{vertical:"center",horizontal:"center",wrapText:true}}; };
+      for (let c=0;c<6;c++) setStyle(0,c,{font:{name:"Arial",sz:15,bold:true,color:{rgb:"FFFFFF"}}, fill:{fgColor:{rgb:"991B1B"}}});
+      for (let c=0;c<6;c++) setStyle(1,c,{font:{name:"Arial",sz:11,bold:true,color:{rgb:"FFFFFF"}}, fill:{fgColor:{rgb:"1F2937"}}});
+      for (let r=2;r<rows.length+2;r++) for (let c=0;c<6;c++) setStyle(r,c,{font:{name:"Arial",sz:10}, fill:{fgColor:{rgb:r%2===0?"F3F4F6":"FFFFFF"}}});
+      ws["!autofilter"] = { ref:`A2:F${Math.max(2,rows.length+2)}` };
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "تقرير الرحلات");
-      XLSX.writeFile(wb, `تقرير_رحلات_المناديب_${from}_${to}.xlsx`);
-      showToast(`تم تصدير ${rows.length} رحلة بنجاح.`, "success");
-    } catch (error) {
-      showToast(`تعذر تصدير الملف: ${error.message || "خطأ غير معروف"}`, "error", 6000);
-    }
-  }
-
-  function exportExtraDaysExcel() {
-    if (!isAdmin()) return showToast("تصدير Excel متاح للمشرف فقط.", "error");
-    if (typeof XLSX === "undefined") return showToast("مكتبة Excel لم تُحمّل. تأكد من الإنترنت ثم حاول مرة أخرى.", "error", 6000);
-    const from = $("extraFromDate")?.value || "";
-    const to = $("extraToDate")?.value || "";
-    if (!from || !to) return showToast("حدد تاريخ البداية والنهاية قبل التصدير.", "warning");
-    if (from > to) return showToast("تاريخ البداية يجب ألا يكون بعد تاريخ النهاية.", "warning");
-
-    showToast("جاري تجهيز ملف Excel لأيام العمل الإضافية...", "loading");
-    try {
-      const rows = getVisibleExtraDays();
-      const repNames = [...new Set(rows.map((item) => item.repName).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ar"));
-      const aoa = [
-        ["تقرير أيام العمل الإضافية - TAGADDOD", "", "", "", ""],
-        ["الطابع الزمني", "التاريخ", "اسم المندوب", "السبب / الملاحظات", "حالة الإثبات"],
-        ...rows.map((item) => [
-          formatTimestamp(item.timestamp),
-          item.date || "",
-          item.repName || "",
-          item.reason || item.notes || "يوم عمل إضافي",
-          safeImageUrl(item.proofImage || item.proof || item.image || "") ? "مرفق صورة" : "بدون صورة"
-        ])
-      ];
-      const summaryTitleRow = aoa.length + 2;
-      aoa.push([], ["ملخص أيام العمل الإضافية حسب المندوب", "", ""]);
-      const summaryHeaderRow = aoa.length + 1;
-      aoa.push(["اسم المندوب", "عدد الأيام الإضافية", "عدد الإثباتات المرفقة"]);
-      repNames.forEach((name) => {
-        const own = rows.filter((item) => item.repName === name);
-        const ownProofs = own.filter((item) => Boolean(safeImageUrl(item.proofImage || item.proof || item.image || ""))).length;
-        aoa.push([name, own.length, ownProofs]);
-      });
-      const grandTotalRow = aoa.length + 1;
-      const totalProofs = rows.filter((item) => Boolean(safeImageUrl(item.proofImage || item.proof || item.image || ""))).length;
-      aoa.push(["الإجمالي العام", rows.length, totalProofs]);
-
-      const ws = XLSX.utils.aoa_to_sheet(aoa);
-      ws["!cols"] = [{ wch: 24 }, { wch: 15 }, { wch: 23 }, { wch: 30 }, { wch: 18 }];
-      styleStyledWorkbook(ws, aoa, 5, summaryTitleRow, summaryHeaderRow, grandTotalRow, null);
-      ws["!autofilter"] = { ref: `A2:E${Math.max(2, rows.length + 2)}` };
-
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "أيام العمل الإضافية");
-      XLSX.writeFile(wb, `تقرير_أيام_العمل_الإضافية_${from}_${to}.xlsx`);
-      showToast(`تم تصدير ${rows.length} سجل يوم إضافي بنجاح.`, "success");
-    } catch (error) {
-      showToast(`تعذر تصدير الملف: ${error.message || "خطأ غير معروف"}`, "error", 6000);
-    }
+      XLSX.writeFile(wb, `تقرير_المناديب_${from}_${to}.xlsx`);
+      showToast(`تم تصدير ${rows.length} رحلة.`, "success");
+    } catch (e) { showToast(`تعذر التصدير: ${e.message}`, "error", 6000); }
   }
 
   function bindEvents() {
-    $("checkUpdateBtn")?.addEventListener("click", () => checkForAppUpdate(true));
     $("loginPhoneInput").addEventListener("input", syncAuthFields);
-    $("loginPhoneInput").addEventListener("change", syncAuthFields);
-    $("loginForm").addEventListener("submit", (event) => { event.preventDefault(); login(); });
+    $("loginForm").addEventListener("submit", (e)=>{ e.preventDefault(); login(); });
     $("openLoginFromSamplesBtn").addEventListener("click", openLogin);
-    ["backToSamplesBtn", "cancelLoginBtn"].forEach((id) => $(id).addEventListener("click", () => { setView("app"); switchTab("analysisTab"); }));
-    $("openChangePassBtn").addEventListener("click", () => { $("updatePhoneInput").value = ""; $("updatePhoneInput").placeholder = state.user?.phone || "اتركه فارغًا دون تغيير"; setView("profile"); });
-    $("closeProfileModalBtn").addEventListener("click", () => setView("app"));
+    ["backToSamplesBtn","cancelLoginBtn"].forEach((id)=>$(id).addEventListener("click", ()=>{ setView("app"); switchTab("analysisTab"); }));
+    $("openChangePassBtn").addEventListener("click", ()=>{ $("updatePhoneInput").value = ""; setView("profile"); });
+    $("closeProfileModalBtn").addEventListener("click", ()=>setView("app"));
     $("saveProfileChangesBtn").addEventListener("click", saveProfile);
-    $("logoutBtn").addEventListener("click", () => {
-      if (navigator.onLine && sessionToken()) apiPost("logout", {}).catch(() => {});
+    $("logoutBtn").addEventListener("click", ()=>{
+      if (navigator.onLine && sessionToken()) apiPost("logout", {}).catch(()=>{});
       localStorage.removeItem(CONFIG.sessionKey);
       firstLoginMode = false;
-      state.user = null;
-      state.accounts = [];
-      state.trips = [];
-      state.extraDays = [];
-      cacheState();
-      renderHeader();
-      setView("app");
-      switchTab("analysisTab");
+      state = { user:null, accounts:[], trips:[], tripCount:0, extraDays:[], extraCount:0, allowance:50 };
+      cacheState(); renderHeader(); setView("app"); switchTab("analysisTab");
       showToast("تم تسجيل الخروج.", "success");
     });
-    document.querySelectorAll(".tab-btn").forEach((button) => button.addEventListener("click", () => switchTab(button.dataset.tab)));
+    document.querySelectorAll(".tab-btn").forEach((b)=>b.addEventListener("click", ()=>switchTab(b.dataset.tab)));
 
-    $("tripForm").addEventListener("submit", async (event) => {
-      event.preventDefault();
-      if (busy) return;
-      if (!navigator.onLine) return showToast("النت فاصل. افتح النت الأول وبعد كده سجل الرحلة.", "error", 6500);
+    $("tripForm").addEventListener("submit", async (e)=>{
+      e.preventDefault();
+      if (!navigator.onLine) return showToast("النت فاصل.", "error", 6500);
       if (!state.user) return openLogin();
       const date = $("tripDate").value;
       const place = $("tripPlace").value.trim();
       const client = $("tripClient").value.trim();
       const allowance = Number($("tripAllowance").value);
-      if (!date || !place || !client || !Number.isFinite(allowance) || allowance < 0) {
-        return showToast("راجع بيانات الرحلة والبدل قبل التسجيل.", "warning");
-      }
-      const submitBtn = event.submitter || $("tripForm")?.querySelector('button[type="submit"]');
+      if (!date||!place||!client||!Number.isFinite(allowance)) return showToast("راجع البيانات.", "warning");
       const repPhone = isAdmin() ? $("tripRepSelect").value : state.user.phone;
-      if (submitBtn) submitBtn.disabled = true;
-      const ok = await runMutation(
-        "add_trip",
-        { date, place, client, allowance, repPhone, timestamp: formatTimestamp(new Date()) },
-        "تم تسجيل رحلة جديدة بنجاح.",
-        "جاري تسجيل الرحلة على النظام..."
-      );
-      if (submitBtn) submitBtn.disabled = false;
-      if (ok) {
-        $("tripPlace").value = "";
-        $("tripClient").value = "";
-      }
+      const ok = await runMutation("add_trip", { date, place, client, allowance, repPhone }, "تم تسجيل الرحلة.", "جاري التسجيل...");
+      if (ok) { $("tripPlace").value = ""; $("tripClient").value = ""; }
     });
 
-    $("extraDayForm")?.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      if (busy) return;
-      if (!navigator.onLine) return showToast("النت فاصل. افتح النت الأول وبعد كده سجل اليوم الإضافي.", "error", 6500);
+    $("extraDayForm").addEventListener("submit", async (e)=>{
+      e.preventDefault();
+      if (!navigator.onLine) return showToast("النت فاصل.", "error", 6500);
       if (!state.user) return openLogin();
       const date = $("extraDayDate").value;
       const reason = $("extraDayReason").value.trim();
-      if (!date || !reason) return showToast("أدخل تاريخ اليوم الإضافي وسبب التكليف.", "warning");
-
-      const submitBtn = event.submitter || $("extraDayForm")?.querySelector('button[type="submit"]');
       const repPhone = isAdmin() ? $("extraDayRepSelect").value : state.user.phone;
-      if (submitBtn) submitBtn.disabled = true;
-      try {
-        showToast("جاري تجهيز بيانات اليوم الإضافي...", "loading");
-        const proofImage = await compressImageFile($("extraDayProofInput")?.files?.[0], 900, 0.62);
-        busy = false;
-        const ok = await runMutation(
-          "add_extra_day",
-          { date, reason, proofImage, repPhone, timestamp: formatTimestamp(new Date()) },
-          "تم تسجيل يوم العمل الإضافي بنجاح.",
-          "جاري حفظ اليوم الإضافي على النظام..."
-        );
-        if (ok) {
-          $("extraDayReason").value = "";
-          if ($("extraDayProofInput")) $("extraDayProofInput").value = "";
-        }
-      } catch (error) {
-        showToast(error.message || "تعذر تجهيز صورة الإثبات.", "error", 6000);
-      } finally {
-        if (submitBtn) submitBtn.disabled = false;
+      if (!date||!reason) return showToast("أدخل التاريخ والسبب.", "warning");
+      let proofData = "", proofName = "", proofType = "";
+      const f = $("extraDayProofInput").files?.[0];
+      if (f) {
+        if (f.size > 4.5*1024*1024) return showToast("الصورة كبيرة (أقصى 4.5 ميجا).", "warning");
+        proofData = await new Promise((res)=>{ const r = new FileReader(); r.onload = ()=>res(String(r.result)); r.readAsDataURL(f); });
+        proofName = f.name; proofType = f.type;
       }
+      const ok = await runMutation("add_extra_day", { date, reason, repPhone, proofData, proofName, proofType }, "تم حفظ اليوم الإضافي.", "جاري الحفظ...");
+      if (ok) { $("extraDayReason").value = ""; $("extraDayProofInput").value = ""; }
     });
 
-    $("addRepForm").addEventListener("submit", async (event) => {
-      event.preventDefault();
+    $("addRepForm").addEventListener("submit", async (e)=>{
+      e.preventDefault();
       if (!isAdmin()) return alert("غير مصرح.");
       const name = $("newRepName").value.trim();
       const phone = normalizePhone($("newRepPhone").value);
       const role = $("newRepRole").value;
-      if (!name || phone.length < 10) return showToast("أدخل اسمًا ورقم تليفون صحيحًا.", "warning");
-      const ok = await runMutation("add_account", { name, phone, role }, "تم إضافة الحساب بنجاح.", "جاري إضافة الحساب...");
-      if (ok) { $("newRepName").value = ""; $("newRepPhone").value = ""; }
+      if (!name||phone.length<10) return showToast("أدخل اسم ورقم صحيح.", "warning");
+      const r = await runMutation("add_account", { name, phone, role }, "تم إضافة الحساب.", "جاري الإضافة...");
+      if (r && r.activationCode) showToast(`كود التفعيل: ${r.activationCode}`, "success", 15000);
+      if (r) { $("newRepName").value = ""; $("newRepPhone").value = ""; }
     });
-    $("saveAllowanceBtn").addEventListener("click", async () => {
+
+    $("saveAllowanceBtn").addEventListener("click", async ()=>{
       const allowance = Number($("defaultAllowanceInput").value);
-      if (!Number.isFinite(allowance) || allowance < 0) return showToast("أدخل قيمة بدل صحيحة.", "warning");
-      await runMutation("set_allowance", { allowance }, "تم حفظ بدل السفر الافتراضي بنجاح.", "جاري حفظ بدل السفر...");
+      if (!Number.isFinite(allowance)||allowance<0) return showToast("قيمة البدل غير صحيحة.", "warning");
+      await runMutation("set_allowance", { allowance }, "تم حفظ البدل.", "جاري الحفظ...");
     });
-    ["fromDate", "toDate"].forEach((id) => $(id).addEventListener("change", () => { currentTripPage = 1; renderTrips(); }));
-    $("tripSearchInput").addEventListener("input", () => { currentTripPage = 1; renderTrips(); });
-    $("prevTripsPageBtn").addEventListener("click", () => { currentTripPage -= 1; renderTrips(); });
-    $("nextTripsPageBtn").addEventListener("click", () => { currentTripPage += 1; renderTrips(); });
+
+    ["fromDate","toDate"].forEach((id)=>$(id).addEventListener("change", ()=>{ currentTripPage = 1; renderTrips(); }));
+    $("tripSearchInput").addEventListener("input", ()=>{ renderTrips(); });
+    $("prevTripsPageBtn").addEventListener("click", async ()=>{ currentTripPage -= 1; await pullState(false,{tripPage:currentTripPage}); });
+    $("nextTripsPageBtn").addEventListener("click", async ()=>{ currentTripPage += 1; await pullState(false,{tripPage:currentTripPage}); });
+       $("prevExtraPageBtn").addEventListener("click", async ()=>{ currentExtraPage -= 1; await pullState(false,{extraPage:currentExtraPage}); });
+    $("nextExtraPageBtn").addEventListener("click", async ()=>{ currentExtraPage += 1; await pullState(false,{extraPage:currentExtraPage}); });
     $("exportExcelBtn").addEventListener("click", exportExcel);
-
-    ["extraFromDate", "extraToDate"].forEach((id) => $(id)?.addEventListener("change", () => { currentExtraPage = 1; renderExtraDays(); }));
-    $("extraSearchInput")?.addEventListener("input", () => { currentExtraPage = 1; renderExtraDays(); });
-    $("prevExtraPageBtn")?.addEventListener("click", () => { currentExtraPage -= 1; renderExtraDays(); });
-    $("nextExtraPageBtn")?.addEventListener("click", () => { currentExtraPage += 1; renderExtraDays(); });
-    $("exportExtraExcelBtn")?.addEventListener("click", exportExtraDaysExcel);
-    $("syncExtraNowBtn")?.addEventListener("click", () => pullState(true));
-
-    $("syncNowBtn").addEventListener("click", () => pullState(true));
+    $("syncNowBtn").addEventListener("click", ()=>pullState(true));
+    $("syncExtraNowBtn").addEventListener("click", ()=>pullState(true));
     const today = new Date();
-    const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-    $("tripDate").value = todayIso;
-    if ($("extraDayDate")) $("extraDayDate").value = todayIso;
-    window.addEventListener("online", () => { setConnectionBadge(); pullState(true); });
-    window.addEventListener("offline", () => {
-      setConnectionBadge();
-      showToast("الاتصال بالإنترنت انقطع. لن يتم تسجيل أي رحلة أو تعديل قبل رجوع النت.", "error", 7000);
-    });
+    $("tripDate").value = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}`;
+    $("extraDayDate").value = $("tripDate").value;
+    window.addEventListener("online", ()=>{ setConnectionBadge(); pullState(true); });
+    window.addEventListener("offline", ()=>{ setConnectionBadge(); showToast("الاتصال انقطع. لن يمكن تسجيل أي رحلة أو يوم إضافي.", "error", 7000); });
   }
 
   async function init() {
@@ -919,29 +491,18 @@
     switchTab("analysisTab");
     if (sessionToken()) {
       const loaded = await pullState(false);
-      if (loaded) {
-        setView("app");
-        switchTab("analysisTab");
-      } else if (!navigator.onLine) {
-        setStatus("غير متصل. لا يمكن تأكيد الجلسة أو تسجيل رحلات الآن.", "warning");
-      } else {
+      if (loaded) { setView("app"); switchTab("analysisTab"); }
+      else if (!navigator.onLine) setStatus("غير متصل. سجل الدخول لما النت يرجع.", "warning");
+      else {
         localStorage.removeItem(CONFIG.sessionKey);
-        state.user = null;
-        state.accounts = [];
-        state.trips = [];
-        state.extraDays = [];
-        cacheState();
-        renderHeader();
+        state = { user:null, accounts:[], trips:[], tripCount:0, extraDays:[], extraCount:0, allowance:50 };
+        cacheState(); renderHeader();
       }
     } else {
-      state.user = null;
-      state.accounts = [];
-      state.trips = [];
-      state.extraDays = [];
+      state = { user:null, accounts:[], trips:[], tripCount:0, extraDays:[], extraCount:0, allowance:50 };
       renderHeader();
     }
     setConnectionBadge();
-    checkForAppUpdate(false);
   }
 
   document.addEventListener("DOMContentLoaded", init);
