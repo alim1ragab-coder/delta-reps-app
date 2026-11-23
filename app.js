@@ -3,6 +3,8 @@
   "use strict";
 
   const CONFIG = {
+    appVersion: "1.0.0",
+    updateCheckUrl: "https://raw.githubusercontent.com/aliragab-coder/delta-reps/main/version.json",
     sheetUrl: "https://script.google.com/macros/s/AKfycbyvS1rBt0LLWheSWSH0Uk9dwKmeWF5i_T5Rr7iWSUaeS-X8dqVhHOu5rj8chF8E2Bk/exec",
     sessionKey: "delta_session_token_v5",
     cacheKey: "delta_state_cache_v5",
@@ -202,6 +204,38 @@
       return false;
     } finally {
       busy = false;
+    }
+  }
+
+  async function checkForAppUpdate(manual = false) {
+    if (!CONFIG.updateCheckUrl) {
+      if (manual) showToast("لم يتم تحديد رابط ملف التحديثات بعد.", "warning");
+      return;
+    }
+    if (!navigator.onLine) {
+      if (manual) showToast("اتصل بالإنترنت أولاً للبحث عن تحديثات.", "warning");
+      return;
+    }
+    if (manual) showToast("جاري البحث عن إصدار جديد...", "loading");
+    try {
+      const sep = CONFIG.updateCheckUrl.includes("?") ? "&" : "?";
+      const res = await fetch(`${CONFIG.updateCheckUrl}${sep}t=${Date.now()}`, { cache: "no-store" });
+      if (!res.ok) throw new Error("تعذر الوصول لملف التحديثات.");
+      const data = await res.json();
+      const latestVersion = String(data.version || "").trim();
+      const apkUrl = String(data.apkUrl || "").trim();
+      const notes = String(data.notes || "").trim();
+
+      if (latestVersion && latestVersion !== CONFIG.appVersion) {
+        const msg = `يتوفر إصدار جديد (${latestVersion}) — الإصدار الحالي (${CONFIG.appVersion})${notes ? `\n\nالتحديثات:\n${notes}` : ""}\n\nهل تريد تحميل النسخة الجديدة الآن؟`;
+        if (confirm(msg) && apkUrl) {
+          window.open(apkUrl, "_blank");
+        }
+      } else if (manual) {
+        showToast(`أنت على أحدث إصدار بالفعل (v${CONFIG.appVersion}).`, "success");
+      }
+    } catch (_) {
+      if (manual) showToast("تعذر التحقق من وجود تحديثات حالياً.", "error");
     }
   }
 
@@ -508,24 +542,24 @@
       ];
 
       const border = {
-        top: { style: "thin", color: { rgb: "235861" } },
-        bottom: { style: "thin", color: { rgb: "235861" } },
-        left: { style: "thin", color: { rgb: "235861" } },
-        right: { style: "thin", color: { rgb: "235861" } }
+        top: { style: "thin", color: { rgb: "9CA3AF" } },
+        bottom: { style: "thin", color: { rgb: "9CA3AF" } },
+        left: { style: "thin", color: { rgb: "9CA3AF" } },
+        right: { style: "thin", color: { rgb: "9CA3AF" } }
       };
       const setStyle = (r, c, style) => {
         const cell = ws[XLSX.utils.encode_cell({ r, c })];
         if (cell) cell.s = { ...style, border, alignment: { vertical: "center", horizontal: "center", wrapText: true, ...(style.alignment || {}) } };
       };
-      const titleStyle = { font: { name: "Arial", sz: 15, bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "0C2226" } } };
-      const headerStyle = { font: { name: "Arial", sz: 11, bold: true, color: { rgb: "5EEAD4" } }, fill: { fgColor: { rgb: "102C31" } } };
-      const totalStyle = { font: { name: "Arial", sz: 11, bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "14353B" } } };
-      const bodyStyle = { font: { name: "Arial", sz: 10, color: { rgb: "172824" } }, fill: { fgColor: { rgb: "FFFFFF" } } };
+      const titleStyle = { font: { name: "Arial", sz: 15, bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "991B1B" } } };
+      const headerStyle = { font: { name: "Arial", sz: 11, bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "1F2937" } } };
+      const totalStyle = { font: { name: "Arial", sz: 11, bold: true, color: { rgb: "991B1B" } }, fill: { fgColor: { rgb: "FEE2E2" } } };
+      const bodyStyle = { font: { name: "Arial", sz: 10, color: { rgb: "111827" } }, fill: { fgColor: { rgb: "FFFFFF" } } };
       for (let c = 0; c < 6; c += 1) setStyle(0, c, titleStyle);
       for (let c = 0; c < 6; c += 1) setStyle(1, c, headerStyle);
       for (let r = 2; r < rows.length + 2; r += 1) {
         for (let c = 0; c < 6; c += 1) {
-          const style = { ...bodyStyle, fill: { fgColor: { rgb: r % 2 === 0 ? "F2F8F8" : "FFFFFF" } } };
+          const style = { ...bodyStyle, fill: { fgColor: { rgb: r % 2 === 0 ? "F3F4F6" : "FFFFFF" } } };
           if (c === 5) style.numFmt = "#,##0.00";
           setStyle(r, c, style);
         }
@@ -535,7 +569,7 @@
       const summaryStart = summaryHeaderRow;
       for (let r = summaryStart; r < grandTotalRow - 1; r += 1) {
         for (let c = 0; c < 3; c += 1) {
-          const style = { ...bodyStyle, fill: { fgColor: { rgb: r % 2 === 0 ? "F2F8F8" : "FFFFFF" } } };
+          const style = { ...bodyStyle, fill: { fgColor: { rgb: r % 2 === 0 ? "F3F4F6" : "FFFFFF" } } };
           if (c === 2) style.numFmt = "#,##0.00";
           setStyle(r, c, style);
         }
@@ -556,6 +590,7 @@
   }
 
   function bindEvents() {
+    $("checkUpdateBtn")?.addEventListener("click", () => checkForAppUpdate(true));
     $("loginPhoneInput").addEventListener("input", syncAuthFields);
     $("loginPhoneInput").addEventListener("change", syncAuthFields);
     $("loginForm").addEventListener("submit", (event) => { event.preventDefault(); login(); });
@@ -634,7 +669,7 @@
         switchTab("analysisTab");
       } else if (!navigator.onLine) {
         setStatus("غير متصل. لا يمكن تأكيد الجلسة أو تسجيل رحلات الآن.", "warning");
-      } else if (navigator.onLine) {
+      } else {
         localStorage.removeItem(CONFIG.sessionKey);
         state.user = null;
         state.accounts = [];
@@ -648,10 +683,8 @@
       state.trips = [];
       renderHeader();
     }
-    if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
-      navigator.serviceWorker.register("./sw.js").catch(() => {});
-    }
     setConnectionBadge();
+    checkForAppUpdate(false);
   }
 
   document.addEventListener("DOMContentLoaded", init);
