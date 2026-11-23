@@ -1,20 +1,27 @@
 :root {
-  --bg-main: #0c2226;
-  --bg-panel: #102a2f;
-  --bg-card: #14343a;
-  --bg-soft: #183d44;
-  --teal: #14b8a6;
-  --teal-dark: #0f766e;
-  --mint: #163b3f;
-  --gold: #e7a0aa;
-  --text: #f1f5f9;
-  --muted: #94a3b8;
-  --border: #234c54;
-  --danger-bg: #3b1216;
-  --danger-text: #fca5a5;
-  --deduction-bg: #4a1419;
-  --deduction-border: #e05252;
-  --deduction-text: #fecaca;
+  /* هوية التطبيق الرئيسية: أبيض + أحمر + رصاصي */
+  --bg-main: #e5e7eb;
+  --bg-panel: #ffffff;
+  --bg-card: #f3f4f6;
+  --bg-soft: #e5e7eb;
+  --red: #dc2626;
+  --red-dark: #991b1b;
+  --red-soft: #fef2f2;
+  --slate: #1f2937;
+  --slate-light: #4b5563;
+  --text: #111827;
+  --muted: #6b7280;
+  --border: #d1d5db;
+  --danger-bg: #fee2e2;
+  --danger-text: #991b1b;
+
+  /* هوية منطقة التحاليل فقط: اللون البترولي */
+  --lab-bg: #0c2226;
+  --lab-panel: #102c31;
+  --lab-card: #14353b;
+  --lab-border: #2c6670;
+  --lab-teal: #14b8a6;
+  --lab-accent: #5eead4;
 }
 
 * {
@@ -43,11 +50,12 @@ input[type="number"]::-webkit-inner-spin-button {
 
 input[type="number"] {
   -moz-appearance: textfield;
+  appearance: textfield;
 }
 
 .topbar {
-  background: linear-gradient(135deg, #091a1d 0%, #102e34 100%);
-  color: #fff;
+  background: linear-gradient(135deg, #1f2937 0%, #991b1b 100%);
+  color: #ffffff;
   padding: 13px clamp(14px, 4vw, 42px);
   padding-top: calc(13px + env(safe-area-inset-top));
   display: flex;
@@ -55,7 +63,8 @@ input[type="number"] {
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 2px solid var(--red);
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.16);
 }
 
 .brand {
@@ -69,8 +78,9 @@ input[type="number"] {
   width: 44px;
   height: 44px;
   border-radius: 13px;
-  background: var(--teal);
-  color: #06181b;
+  background: #ffffff;
+  color: var(--red-dark);
+  border: 2px solid var(--red);
   font-weight: 900;
   font-size: 24px;
   display: grid;
@@ -80,10 +90,11 @@ input[type="number"] {
 .brand h1 {
   margin: 0;
   font-size: 19px;
+  color: #ffffff;
 }
 
 .brand small {
-  color: var(--muted);
+  color: #e5e7eb;
   font-size: 11px;
   letter-spacing: 0.4px;
 }
@@ -101,16 +112,17 @@ input[type="number"] {
   height: 34px;
   object-fit: cover;
   border-radius: 50%;
-  border: 2px solid var(--teal);
+  border: 2px solid #ffffff;
 }
 
 .user-badge {
   font-size: 12px;
-  color: #e2e8f0;
-  background: var(--bg-card);
+  color: #1f2937;
+  background: #ffffff;
   padding: 4px 10px;
   border-radius: 999px;
-  border: 1px solid var(--border);
+  border: 1px solid #d1d5db;
+  font-weight: 700;
   max-width: 260px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -126,15 +138,15 @@ input[type="number"] {
 }
 
 .status-online {
-  background: #0f3d36;
-  color: #5eead4;
-  border: 1px solid #14b8a6;
+  background: #ffffff;
+  color: #15803d;
+  border: 1.5px solid #16a34a;
 }
 
 .status-offline {
-  background: #451419;
-  color: #fda4af;
-  border: 1px solid #f43f5e;
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1.5px solid #dc2626;
 }
 
 main {
@@ -150,13 +162,13 @@ main {
   border-radius: 16px;
   padding: 18px;
   margin: 14px 0;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 6px 18px rgba(31, 41, 55, 0.08);
 }
 
 .panel h2 {
   font-size: 18px;
   margin: 0 0 14px;
-  color: #fff;
+  color: var(--slate);
 }
 
 .panel-head {
@@ -177,23 +189,23 @@ main {
 }
 
 .tab-btn {
-  border: 1px solid var(--border);
-  background: var(--bg-panel);
-  color: #cbd5e1;
+  border: 1.5px solid var(--border);
+  background: #ffffff;
+  color: var(--slate);
   padding: 10px 17px;
   border-radius: 11px;
   white-space: nowrap;
   cursor: pointer;
   font: inherit;
-  font-weight: 600;
+  font-weight: 700;
   min-height: 40px;
 }
 
 .tab-btn.active,
 .primary {
-  background: var(--teal-dark) !important;
-  color: #fff !important;
-  border-color: var(--teal) !important;
+  background: var(--red) !important;
+  color: #ffffff !important;
+  border-color: var(--red-dark) !important;
 }
 
 .tab-panel {
@@ -213,40 +225,41 @@ label {
   flex-direction: column;
   gap: 6px;
   font-size: 13px;
-  font-weight: 600;
-  color: #e2e8f0;
+  font-weight: 700;
+  color: var(--slate);
 }
 
 input,
 select {
   width: 100%;
   padding: 10px 11px;
-  border: 1px solid #2b5c66;
+  border: 1.5px solid #cbd5e1;
   border-radius: 9px;
   font: inherit;
-  background: #0b1e22;
-  color: #fff;
+  background: #ffffff;
+  color: var(--text);
   min-width: 0;
 }
 
 input::placeholder {
-  color: #7c9aa1;
-  opacity: 0.85;
+  color: #9ca3af;
+  opacity: 0.95;
 }
 
 input:focus,
 select:focus {
-  outline: 2px solid rgba(20, 184, 166, 0.45);
-  border-color: var(--teal);
+  outline: 2px solid rgba(220, 38, 38, 0.25);
+  border-color: var(--red);
 }
 
 button {
   font: inherit;
   cursor: pointer;
-  border: 1px solid transparent;
+  border: 1.5px solid transparent;
   border-radius: 9px;
   padding: 9px 14px;
   min-height: 40px;
+  font-weight: 700;
 }
 
 button:disabled {
@@ -254,21 +267,21 @@ button:disabled {
   cursor: not-allowed;
 }
 
-.primary {
-  font-weight: 700;
+.secondary {
+  background: #f3f4f6;
+  color: var(--slate);
+  border-color: #9ca3af;
 }
 
-.secondary {
-  background: var(--bg-card);
-  color: #5eead4;
-  border-color: #2b5c66;
+.secondary:hover {
+  background: #e5e7eb;
 }
 
 .danger,
 .btn-danger {
   background: var(--danger-bg);
   color: var(--danger-text);
-  border-color: #7f1d1d;
+  border-color: #fca5a5;
 }
 
 .btn-sm {
@@ -317,18 +330,19 @@ button:disabled {
 .notice {
   font-size: 13px;
   margin: 8px 0;
+  font-weight: 600;
 }
 
 .notice.success {
-  color: #5eead4;
+  color: #15803d;
 }
 
 .notice.error {
-  color: #fca5a5;
+  color: #b91c1c;
 }
 
 .notice.warning {
-  color: #fcd34d;
+  color: #b45309;
 }
 
 .filters {
@@ -367,20 +381,20 @@ td {
 }
 
 th {
-  background: #0b2c32 !important;
-  color: #5eead4 !important;
-  border-color: #2b5c66 !important;
+  background: var(--slate) !important;
+  color: #ffffff !important;
+  border-color: #374151 !important;
   white-space: nowrap;
 }
 
 tbody tr:nth-child(even) {
-  background: rgba(20, 52, 58, 0.55);
+  background: #f9fafb;
 }
 
 .summary-text {
   font-size: 13px;
-  color: #5eead4;
-  font-weight: 700;
+  color: var(--red-dark);
+  font-weight: 800;
   margin: 12px 0;
 }
 
@@ -398,12 +412,39 @@ tbody tr:nth-child(even) {
   font-size: 12px;
 }
 
-/* تصميم كارت التحاليل */
+/* ============================================================
+   منطقة التحاليل فقط: الهوية البترولية الكاملة
+   ============================================================ */
 .lab-showcase-panel {
-  border: 2.5px solid var(--teal);
+  border: 2.5px solid var(--lab-teal);
   border-radius: 22px;
-  padding: 22px 16px;
-  background: #0c2226;
+  padding: 20px 12px;
+  background: var(--lab-bg);
+  color: #f1f5f9;
+  box-shadow: 0 10px 26px rgba(12, 34, 38, 0.28);
+}
+
+.lab-showcase-panel label {
+  color: #e2e8f0;
+}
+
+.lab-showcase-panel input {
+  background: #0b1e22;
+  color: #ffffff;
+  border-color: #2b5c66;
+}
+
+.lab-showcase-panel input::placeholder {
+  color: #7c9aa1;
+}
+
+.lab-showcase-panel input:focus {
+  outline: 2px solid rgba(20, 184, 166, 0.45);
+  border-color: var(--lab-teal);
+}
+
+.lab-showcase-panel .muted {
+  color: #94a3b8;
 }
 
 .lab-showcase-title {
@@ -425,30 +466,31 @@ tbody tr:nth-child(even) {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 
 .lab-group-box {
-  background: #102c31;
+  background: var(--lab-panel);
   border: 1.5px solid #214e56;
   border-radius: 18px;
-  padding: 12px;
-  margin-bottom: 16px;
+  padding: 10px 8px;
+  margin-bottom: 14px;
   overflow-x: auto;
 }
 
+/* الصف الأول: 4 مربعات جنب بعض مع توسيع مساحة الكتابة */
 .lab-weights-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(72px, 1fr));
-  gap: 10px;
-  min-width: 310px;
+  grid-template-columns: repeat(4, minmax(76px, 1fr));
+  gap: 7px;
+  min-width: 316px;
 }
 
 .lab-box-card {
-  background: #14353b;
-  border: 1.6px solid #2c6670;
-  border-radius: 13px;
-  padding: 10px 6px;
+  background: var(--lab-card);
+  border: 1.6px solid var(--lab-border);
+  border-radius: 12px;
+  padding: 8px 4px;
   text-align: center;
   align-items: center;
   justify-content: space-between;
@@ -463,16 +505,19 @@ tbody tr:nth-child(even) {
 }
 
 .lab-box-card input {
+  width: 100%;
   text-align: center;
-  font-size: clamp(15px, 3.6vw, 20px);
+  font-size: clamp(16px, 3.8vw, 21px);
   font-weight: 800;
+  letter-spacing: 0.2px;
   color: #ffffff;
-  background: #0d2429;
-  border: 1px solid #2b6770;
-  border-radius: 9px;
-  padding: 6px 4px;
+  background: #0b1f23;
+  border: 1px solid #357b87;
+  border-radius: 8px;
+  padding: 7px 3px;
 }
 
+/* الصف الثاني: 3 مربعات جنب بعض (نسبة المياه، نسبة الرواسب، نسبة الأحماض) */
 .analysis-results {
   display: grid !important;
   grid-template-columns: repeat(3, minmax(85px, 1fr)) !important;
@@ -482,8 +527,8 @@ tbody tr:nth-child(even) {
 
 .lab-metric-box {
   padding: 12px 6px;
-  background: #14353b;
-  border: 1.8px solid #2c6670;
+  background: var(--lab-card);
+  border: 1.8px solid var(--lab-border);
   border-radius: 14px;
   text-align: center;
 }
@@ -499,7 +544,7 @@ tbody tr:nth-child(even) {
 
 .lab-metric-box b {
   font-size: clamp(15px, 3.8vw, 26px);
-  color: #5eead4;
+  color: var(--lab-accent);
   font-weight: 800;
   white-space: nowrap;
 }
@@ -593,10 +638,11 @@ tbody tr:nth-child(even) {
 
 footer {
   text-align: center;
-  color: var(--muted);
+  color: var(--slate-light);
   padding: 22px 10px;
   padding-bottom: calc(22px + env(safe-area-inset-bottom));
   font-size: 12px;
+  font-weight: 600;
 }
 
 .app-toast {
@@ -608,10 +654,10 @@ footer {
   width: min(92vw, 520px);
   padding: 13px 18px;
   border-radius: 12px;
-  background: #0e2e34;
-  color: #fff;
-  border: 1px solid var(--teal);
-  box-shadow: 0 10px 35px rgba(0, 0, 0, 0.45);
+  background: var(--slate);
+  color: #ffffff;
+  border: 1.5px solid #9ca3af;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
   font-size: 14px;
   font-weight: 700;
   text-align: center;
@@ -626,22 +672,22 @@ footer {
 }
 
 .app-toast.success {
-  background: #093b32;
-  border-color: #14b8a6;
+  background: #14532d;
+  border-color: #22c55e;
 }
 
 .app-toast.error {
-  background: #4a1419;
-  border-color: #f43f5e;
+  background: #7f1d1d;
+  border-color: #ef4444;
 }
 
 .app-toast.warning {
-  background: #422d08;
+  background: #78350f;
   border-color: #f59e0b;
 }
 
 .app-toast.loading {
-  background: #0e2e34;
+  background: var(--slate);
   padding-right: 44px;
 }
 
@@ -769,7 +815,7 @@ footer {
 
   /* كارت التحليل على الموبايل */
   .lab-showcase-panel {
-    padding: 16px 12px;
+    padding: 16px 10px;
     border-radius: 18px;
   }
 
@@ -788,38 +834,51 @@ footer {
   }
 
   .lab-group-box {
-    padding: 10px;
+    padding: 8px 6px;
     border-radius: 15px;
     margin-bottom: 12px;
     overflow-x: visible;
   }
 
-  /* مربعات الأوزان: صفين في 2 كروت */
+  /* الصف الأول على الموبايل: 4 مربعات جنب بعض بمساحة كتابة واسعة */
   .lab-weights-grid {
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 5px;
     min-width: 0;
   }
 
   .lab-box-card {
-    padding: 9px 6px;
+    padding: 8px 2px;
     border-radius: 11px;
   }
 
-  .lab-box-card input {
-    font-size: 16px;
-    padding: 8px 4px;
+  .lab-box-card span {
+    font-size: 10.5px;
   }
 
+  .lab-box-card input {
+    font-size: 14.5px;
+    padding: 7px 2px;
+  }
+
+  /* الصف الثاني على الموبايل: 3 مربعات جنب بعض */
   .analysis-results {
-    gap: 8px;
+    gap: 6px;
     min-width: 0;
     grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   }
 
   .lab-metric-box {
-    padding: 10px 4px;
+    padding: 10px 3px;
     border-radius: 12px;
+  }
+
+  .lab-metric-box span {
+    font-size: 11px;
+  }
+
+  .lab-metric-box b {
+    font-size: 15px;
   }
 
   .analysis-deduction-wrap {
@@ -861,16 +920,16 @@ footer {
 
   .table-wrap tbody tr {
     display: block;
-    background: var(--bg-card) !important;
+    background: #f9fafb !important;
     border: 1.5px solid var(--border);
     border-radius: 14px;
     margin-bottom: 12px;
     padding: 4px 14px;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 3px 10px rgba(31, 41, 55, 0.06);
   }
 
   .table-wrap tbody tr:nth-child(even) {
-    background: var(--bg-card) !important;
+    background: #f9fafb !important;
   }
 
   .table-wrap td {
@@ -892,7 +951,7 @@ footer {
   .table-wrap td::before {
     content: attr(data-label);
     font-weight: 700;
-    color: #5eead4;
+    color: var(--red-dark);
     font-size: 12px;
     flex-shrink: 0;
   }
@@ -967,7 +1026,11 @@ footer {
     font-size: 19px !important;
   }
 
+  .lab-box-card input {
+    font-size: 13.5px;
+  }
+
   .lab-metric-box b {
-    font-size: 16px;
+    font-size: 14px;
   }
 }
