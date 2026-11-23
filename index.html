@@ -7,8 +7,9 @@
   <meta name="description" content="إدارة رحلات مناديب الدلتا وبدل السفر وأيام العمل الإضافية وتحليل عينات الزيت">
   <title>مناديب الدلتا | TAGADDOD</title>
   <link rel="icon" href="icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css?v=20261123-red-slate-lab-teal">
-  <base target="_blank">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="styles.css?v=20261123-v2">
 </head>
 <body>
   <header class="topbar">
@@ -20,7 +21,6 @@
       <span id="connectionStatusBadge" class="status-badge status-offline">جارٍ التحقق...</span>
       <img id="headerAvatar" class="header-avatar hidden" alt="الصورة الشخصية">
       <span id="userBadge" class="user-badge hidden"></span>
-      <button id="checkUpdateBtn" class="secondary" type="button">تحديثات</button>
       <button id="openLoginFromSamplesBtn" class="secondary" type="button">تسجيل الدخول</button>
       <button id="openChangePassBtn" class="secondary hidden" type="button">حسابي</button>
       <button id="logoutBtn" class="danger hidden" type="button">خروج</button>
@@ -41,11 +41,16 @@
           </label>
         </div>
         <div id="firstTimeSetupBox" class="hidden">
+          <div id="activationCodeBox">
+            <label>كود التفعيل (من المشرف)
+              <input id="activationCodeInput" type="text" autocomplete="one-time-code" placeholder="مثال: A1B2C3">
+            </label>
+          </div>
           <label>كلمة سر جديدة
-            <input id="setupPasswordInput" type="password" minlength="4" autocomplete="new-password">
+            <input id="setupPasswordInput" type="password" minlength="6" autocomplete="new-password">
           </label>
           <label>تأكيد كلمة السر
-            <input id="confirmPasswordInput" type="password" minlength="4" autocomplete="new-password">
+            <input id="confirmPasswordInput" type="password" minlength="6" autocomplete="new-password">
           </label>
         </div>
         <div class="actions-row">
@@ -57,11 +62,11 @@
 
     <section id="profileModalSection" class="panel hidden">
       <div class="panel-head"><h2>تعديل بيانات الحساب</h2><button id="closeProfileModalBtn" class="secondary" type="button">إغلاق</button></div>
-      <p class="muted">اترك الحقول التي لا تريد تغييرها فارغة. تغيير كلمة السر يتطلب كلمة السر الحالية.</p>
+      <p class="muted">اترك الحقول التي لا تريد تغييرها فارغة.</p>
       <form id="profileForm" class="form-grid">
         <label>رقم تليفون جديد<input id="updatePhoneInput" type="tel" inputmode="numeric" placeholder="اتركه فارغًا دون تغيير"></label>
         <label>كلمة السر الحالية<input id="currentPassInput" type="password" autocomplete="current-password"></label>
-        <label>كلمة السر الجديدة<input id="updatedPassInput" type="password" minlength="4" autocomplete="new-password"></label>
+        <label>كلمة السر الجديدة<input id="updatedPassInput" type="password" minlength="6" autocomplete="new-password"></label>
         <label>الصورة الشخصية<input id="updateAvatarInput" type="file" accept="image/*"></label>
         <button id="saveProfileChangesBtn" type="button" class="primary">حفظ التعديلات</button>
       </form>
@@ -89,52 +94,25 @@
             </label>
           </form>
 
-          <!-- الصف الأول: مربعان وتحتهما مربعان للأوزان -->
           <div class="lab-group-box">
             <div class="lab-weights-grid">
-              <label class="lab-box-card">
-                <span>وزن فارغ</span>
-                <input id="labEmptyWeight" type="number" inputmode="decimal" min="0" step="any" placeholder="0">
-              </label>
-              <label class="lab-box-card">
-                <span>قبل الغليان</span>
-                <input id="labBeforeBoil" type="number" inputmode="decimal" min="0" step="any" placeholder="0">
-              </label>
-              <label class="lab-box-card">
-                <span>بعد الغليان</span>
-                <input id="labAfterBoil" type="number" inputmode="decimal" min="0" step="any" placeholder="0">
-              </label>
-              <label class="lab-box-card">
-                <span>وزن الرواسب</span>
-                <input id="labSedimentWeight" type="number" inputmode="decimal" min="0" step="any" placeholder="0">
-              </label>
+              <label class="lab-box-card"><span>وزن فارغ</span><input id="labEmptyWeight" type="number" inputmode="decimal" min="0" step="any" placeholder="0"></label>
+              <label class="lab-box-card"><span>قبل الغليان</span><input id="labBeforeBoil" type="number" inputmode="decimal" min="0" step="any" placeholder="0"></label>
+              <label class="lab-box-card"><span>بعد الغليان</span><input id="labAfterBoil" type="number" inputmode="decimal" min="0" step="any" placeholder="0"></label>
+              <label class="lab-box-card"><span>وزن الرواسب</span><input id="labSedimentWeight" type="number" inputmode="decimal" min="0" step="any" placeholder="0"></label>
             </div>
           </div>
 
-          <!-- الصف الثاني: 3 مربعات جنب بعض للنسب -->
           <div class="lab-group-box">
             <div class="analysis-results">
-              <div class="lab-metric-box">
-                <span>نسبة المياه</span>
-                <b id="resWaterPct">0.00%</b>
-              </div>
-              <div class="lab-metric-box">
-                <span>نسبة الرواسب</span>
-                <b id="resSedimentPct">0.00%</b>
-              </div>
-              <div class="lab-metric-box">
-                <span>نسبة الأحماض</span>
-                <b id="resAcidPct">0.00%</b>
-              </div>
+              <div class="lab-metric-box"><span>نسبة المياه</span><b id="resWaterPct">0.00%</b></div>
+              <div class="lab-metric-box"><span>نسبة الرواسب</span><b id="resSedimentPct">0.00%</b></div>
+              <div class="lab-metric-box"><span>نسبة الأحماض</span><b id="resAcidPct">0.00%</b></div>
             </div>
           </div>
 
-          <!-- الصف الثالث: الخصم بالطن في المنتصف -->
           <div class="analysis-deduction-wrap">
-            <div class="analysis-deduction-box">
-              <span>الخصم بالطن (كجم/طن)</span>
-              <b id="resDeductionPerTon">0</b>
-            </div>
+            <div class="analysis-deduction-box"><span>الخصم بالطن (كجم/طن)</span><b id="resDeductionPerTon">0</b></div>
           </div>
 
           <div class="lab-card-footer">Designed &amp; Structured by ALI RAGAB - TAGADDOD</div>
@@ -144,7 +122,7 @@
             <button id="shareLabImageBtn" type="button" class="secondary">مشاركة صورة التحليل</button>
             <button id="clearLabFormBtn" type="button" class="secondary">تفريغ الحقول</button>
           </div>
-          <p class="muted lab-note-center">السماح للأحماض 3%، والسماح للمياه والرواسب معًا 2%. كل زيادة 1% تُحسب 10 كجم لكل طن.</p>
+          <p class="muted lab-note-center">السماح للأحماض 3%، وللمياه والرواسب معًا 2%. كل زيادة 1% = 10 كجم/طن.</p>
         </div>
 
         <div class="panel">
@@ -170,28 +148,17 @@
         <div class="panel">
           <div class="panel-head">
             <h2>سجل الرحلات وبدل السفر</h2>
-            <button id="syncNowBtn" class="secondary" type="button">تحديث من Google Sheets</button>
+            <button id="syncNowBtn" class="secondary" type="button">تحديث</button>
           </div>
           <div class="filters admin-only hidden">
             <label>من تاريخ<input id="fromDate" type="date"></label>
             <label>إلى تاريخ<input id="toDate" type="date"></label>
-            <label class="search-label">بحث<input id="tripSearchInput" type="search" placeholder="اسم المندوب أو العميل أو المكان"></label>
             <button id="exportExcelBtn" class="secondary" type="button">تصدير Excel</button>
           </div>
           <p id="recordsSummary" class="summary-text">سجل الرحلات</p>
           <div class="table-wrap rep-landscape-wrap">
             <table>
-              <thead>
-                <tr>
-                  <th>الطابع الزمني</th>
-                  <th>التاريخ</th>
-                  <th>المندوب</th>
-                  <th>المكان</th>
-                  <th>العميل</th>
-                  <th>بدل السفر</th>
-                  <th>إجراء</th>
-                </tr>
-              </thead>
+              <thead><tr><th>الطابع الزمني</th><th>التاريخ</th><th>المندوب</th><th>المكان</th><th>العميل</th><th>بدل السفر</th><th>إجراء</th></tr></thead>
               <tbody id="recordsBody"></tbody>
             </table>
           </div>
@@ -200,7 +167,7 @@
             <span id="tripsPageInfo">صفحة 1 من 1</span>
             <button id="nextTripsPageBtn" class="secondary" type="button">التالي</button>
           </div>
-          <p class="muted pagination-hint">المندوب يرى رحلاته كاملة والمشرف يرى جميع الرحلات، مع عرض 10 رحلات في كل صفحة لخفة التصفح.</p>
+          <p class="muted pagination-hint">15 رحلة في كل صفحة. المندوب يرى رحلاته فقط.</p>
         </div>
       </section>
 
@@ -210,37 +177,22 @@
           <form id="extraDayForm" class="form-grid">
             <label>تاريخ اليوم الإضافي<input id="extraDayDate" type="date" required></label>
             <label>المندوب<select id="extraDayRepSelect" required></select></label>
-            <label>سبب التكليف / ملاحظات<input id="extraDayReason" type="text" required placeholder="مثال: اسم العميل او المكان الي انت رايحه"></label>
-            <label>صورة إثبات التكليف أو الفاتورة<input id="extraDayProofInput" type="file" accept="image/*"></label>
+            <label>سبب التكليف / ملاحظات<input id="extraDayReason" type="text" required placeholder="مثال: اسم العميل أو المكان"></label>
+            <label>صورة إثبات التكليف<input id="extraDayProofInput" type="file" accept="image/*"></label>
             <button type="submit" class="primary">حفظ اليوم الإضافي</button>
           </form>
-          <p class="muted">إرفاق صورة فاتورة أو أي إثبات إن الشغل انطلب منك في اليوم الإضافي.</p>
+          <p class="muted">إرفاق صورة إثبات (اختياري). الحالة تبدأ "قيد المراجعة" حتى يوافق المشرف.</p>
         </div>
 
         <div class="panel">
           <div class="panel-head">
             <h2>سجل أيام العمل الإضافية</h2>
-            <button id="syncExtraNowBtn" class="secondary" type="button">تحديث من Google Sheets</button>
-          </div>
-          <div class="filters admin-only hidden">
-            <label>من تاريخ<input id="extraFromDate" type="date"></label>
-            <label>إلى تاريخ<input id="extraToDate" type="date"></label>
-            <label class="search-label">بحث<input id="extraSearchInput" type="search" placeholder="اسم المندوب أو سبب التكليف"></label>
-            <button id="exportExtraExcelBtn" class="secondary" type="button">تصدير Excel أيام إضافية</button>
+            <button id="syncExtraNowBtn" class="secondary" type="button">تحديث</button>
           </div>
           <p id="extraRecordsSummary" class="summary-text">سجل أيام العمل الإضافية</p>
           <div class="table-wrap rep-landscape-wrap">
             <table>
-              <thead>
-                <tr>
-                  <th>الطابع الزمني</th>
-                  <th>التاريخ</th>
-                  <th>المندوب</th>
-                  <th>السبب / الملاحظات</th>
-                  <th>صورة الإثبات</th>
-                  <th>إجراء</th>
-                </tr>
-              </thead>
+              <thead><tr><th>الطابع الزمني</th><th>التاريخ</th><th>المندوب</th><th>السبب</th><th>الإثبات</th><th>الحالة</th><th>إجراء</th></tr></thead>
               <tbody id="extraRecordsBody"></tbody>
             </table>
           </div>
@@ -249,7 +201,6 @@
             <span id="extraPageInfo">صفحة 1 من 1</span>
             <button id="nextExtraPageBtn" class="secondary" type="button">التالي</button>
           </div>
-          <p class="muted pagination-hint">سجل مستقل لأيام العمل الإضافية وصور الإثباتات المرفقة، مع عرض 10 سجلات في كل صفحة.</p>
         </div>
       </section>
 
@@ -272,9 +223,8 @@
           <ul id="repsList" class="reps-list"></ul>
         </div>
         <div class="panel">
-          <h2>مزامنة البيانات</h2>
-          <p id="syncStatus" class="notice">Google Sheets هو مصدر البيانات الأساسي بين الأجهزة.</p>
-          <button id="syncNowAdminBtn" class="secondary" type="button" onclick="document.getElementById('syncNowBtn').click()">مزامنة الآن</button>
+          <h2>حالة المزامنة</h2>
+          <p id="syncStatus" class="notice">Google Sheets هو مصدر البيانات الأساسي.</p>
         </div>
       </section>
     </section>
@@ -284,5 +234,12 @@
   <script defer src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
   <script defer src="analysis.js"></script>
   <script defer src="app.js"></script>
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("sw.js").catch(() => {});
+      });
+    }
+  </script>
 </body>
 </html>
