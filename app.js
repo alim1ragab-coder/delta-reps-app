@@ -92,6 +92,7 @@
     }
     throw new Error("لم يصل تأكيد العملية. راجع السجل قبل إعادة المحاولة.");
   }
+  window.deltaPost = apiPost;
 
   function cacheState() { try { localStorage.setItem(CONFIG.cacheKey, JSON.stringify(state)); } catch(_){} }
   function readCachedState() { try { const s = JSON.parse(localStorage.getItem(CONFIG.cacheKey)||"null"); if (s) state = {...state,...s}; } catch(_){} }
@@ -332,7 +333,6 @@
   }
 
   function openLogin() { setView("auth"); syncAuthFields(); }
-
   async function readCompressedAvatar(file) {
     if (!file) return "";
     if (!file.type.startsWith("image/")) throw new Error("الملف ليس صورة.");
@@ -468,10 +468,9 @@
     });
 
     ["fromDate","toDate"].forEach((id)=>$(id).addEventListener("change", ()=>{ currentTripPage = 1; renderTrips(); }));
-    $("tripSearchInput").addEventListener("input", ()=>{ renderTrips(); });
     $("prevTripsPageBtn").addEventListener("click", async ()=>{ currentTripPage -= 1; await pullState(false,{tripPage:currentTripPage}); });
     $("nextTripsPageBtn").addEventListener("click", async ()=>{ currentTripPage += 1; await pullState(false,{tripPage:currentTripPage}); });
-       $("prevExtraPageBtn").addEventListener("click", async ()=>{ currentExtraPage -= 1; await pullState(false,{extraPage:currentExtraPage}); });
+    $("prevExtraPageBtn").addEventListener("click", async ()=>{ currentExtraPage -= 1; await pullState(false,{extraPage:currentExtraPage}); });
     $("nextExtraPageBtn").addEventListener("click", async ()=>{ currentExtraPage += 1; await pullState(false,{extraPage:currentExtraPage}); });
     $("exportExcelBtn").addEventListener("click", exportExcel);
     $("syncNowBtn").addEventListener("click", ()=>pullState(true));
@@ -482,7 +481,6 @@
     window.addEventListener("online", ()=>{ setConnectionBadge(); pullState(true); });
     window.addEventListener("offline", ()=>{ setConnectionBadge(); showToast("الاتصال انقطع. لن يمكن تسجيل أي رحلة أو يوم إضافي.", "error", 7000); });
   }
-
   async function init() {
     readCachedState();
     bindEvents();
