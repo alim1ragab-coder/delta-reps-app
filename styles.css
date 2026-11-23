@@ -241,6 +241,32 @@ select {
   min-width: 0;
 }
 
+input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--red);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.checkbox-field {
+  justify-content: flex-end;
+}
+
+.checkbox-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 8px 11px;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 9px;
+  background: #f9fafb;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+
 input::placeholder {
   color: #9ca3af;
   opacity: 0.95;
@@ -364,6 +390,7 @@ button:disabled {
 .table-wrap {
   overflow: auto;
   margin-top: 10px;
+  -webkit-overflow-scrolling: touch;
 }
 
 table {
@@ -418,7 +445,7 @@ tbody tr:nth-child(even) {
 .lab-showcase-panel {
   border: 2.5px solid var(--lab-teal);
   border-radius: 22px;
-  padding: 20px 12px;
+  padding: 20px 14px;
   background: var(--lab-bg);
   color: #f1f5f9;
   box-shadow: 0 10px 26px rgba(12, 34, 38, 0.28);
@@ -473,32 +500,32 @@ tbody tr:nth-child(even) {
   background: var(--lab-panel);
   border: 1.5px solid #214e56;
   border-radius: 18px;
-  padding: 10px 8px;
+  padding: 12px;
   margin-bottom: 14px;
   overflow-x: auto;
 }
 
-/* الصف الأول: 4 مربعات جنب بعض مع توسيع مساحة الكتابة */
+/* مربعات الأوزان: مربعان وتحتهما مربعان */
 .lab-weights-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(76px, 1fr));
-  gap: 7px;
-  min-width: 316px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  min-width: 0;
 }
 
 .lab-box-card {
   background: var(--lab-card);
   border: 1.6px solid var(--lab-border);
-  border-radius: 12px;
-  padding: 8px 4px;
+  border-radius: 14px;
+  padding: 12px 10px;
   text-align: center;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
+  gap: 8px;
 }
 
 .lab-box-card span {
-  font-size: clamp(11px, 2.7vw, 15px);
+  font-size: clamp(13px, 2.5vw, 16px);
   font-weight: 700;
   color: #cbd5e1;
   white-space: nowrap;
@@ -507,14 +534,14 @@ tbody tr:nth-child(even) {
 .lab-box-card input {
   width: 100%;
   text-align: center;
-  font-size: clamp(16px, 3.8vw, 21px);
+  font-size: clamp(17px, 3.2vw, 22px);
   font-weight: 800;
   letter-spacing: 0.2px;
   color: #ffffff;
   background: #0b1f23;
   border: 1px solid #357b87;
-  border-radius: 8px;
-  padding: 7px 3px;
+  border-radius: 10px;
+  padding: 9px 6px;
 }
 
 /* الصف الثاني: 3 مربعات جنب بعض (نسبة المياه، نسبة الرواسب، نسبة الأحماض) */
@@ -815,7 +842,7 @@ footer {
 
   /* كارت التحليل على الموبايل */
   .lab-showcase-panel {
-    padding: 16px 10px;
+    padding: 16px 12px;
     border-radius: 18px;
   }
 
@@ -834,31 +861,31 @@ footer {
   }
 
   .lab-group-box {
-    padding: 8px 6px;
+    padding: 10px 8px;
     border-radius: 15px;
     margin-bottom: 12px;
     overflow-x: visible;
   }
 
-  /* الصف الأول على الموبايل: 4 مربعات جنب بعض بمساحة كتابة واسعة */
+  /* مربعات الأوزان على الموبايل: مربعان وتحتهما مربعان */
   .lab-weights-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 5px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
     min-width: 0;
   }
 
   .lab-box-card {
-    padding: 8px 2px;
-    border-radius: 11px;
+    padding: 10px 8px;
+    border-radius: 12px;
   }
 
   .lab-box-card span {
-    font-size: 10.5px;
+    font-size: 12px;
   }
 
   .lab-box-card input {
-    font-size: 14.5px;
-    padding: 7px 2px;
+    font-size: 16px;
+    padding: 8px 6px;
   }
 
   /* الصف الثاني على الموبايل: 3 مربعات جنب بعض */
@@ -902,23 +929,67 @@ footer {
     font-size: 11px;
   }
 
-  /* الجداول تتحول إلى كروت بدل التمرير الأفقي */
+  /* الجداول: عرض عرضي للمندوب، وكروت لجدول التحاليل المحفوظة */
   .table-wrap {
     overflow: visible;
     margin-top: 8px;
   }
 
-  .table-wrap table {
+  .table-wrap.rep-landscape-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: #ffffff;
+  }
+
+  .table-wrap.rep-landscape-wrap table {
+    min-width: 780px;
+    border-collapse: collapse;
+    border-spacing: 0;
+  }
+
+  .table-wrap.rep-landscape-wrap thead {
+    display: table-header-group;
+  }
+
+  .table-wrap.rep-landscape-wrap tbody tr {
+    display: table-row;
+    background: transparent !important;
+    border: none;
+    border-radius: 0;
+    margin-bottom: 0;
+    padding: 0;
+    box-shadow: none;
+  }
+
+  .table-wrap.rep-landscape-wrap tbody tr:nth-child(even) {
+    background: #f9fafb !important;
+  }
+
+  .table-wrap.rep-landscape-wrap td {
+    display: table-cell;
+    border: 1px solid var(--border);
+    padding: 8px;
+    font-size: 12.5px;
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .table-wrap.rep-landscape-wrap td::before {
+    display: none;
+  }
+
+  .table-wrap:not(.rep-landscape-wrap) table {
     min-width: 0;
     border-collapse: separate;
     border-spacing: 0;
   }
 
-  .table-wrap thead {
+  .table-wrap:not(.rep-landscape-wrap) thead {
     display: none;
   }
 
-  .table-wrap tbody tr {
+  .table-wrap:not(.rep-landscape-wrap) tbody tr {
     display: block;
     background: #f9fafb !important;
     border: 1.5px solid var(--border);
@@ -928,11 +999,11 @@ footer {
     box-shadow: 0 3px 10px rgba(31, 41, 55, 0.06);
   }
 
-  .table-wrap tbody tr:nth-child(even) {
+  .table-wrap:not(.rep-landscape-wrap) tbody tr:nth-child(even) {
     background: #f9fafb !important;
   }
 
-  .table-wrap td {
+  .table-wrap:not(.rep-landscape-wrap) td {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -944,11 +1015,11 @@ footer {
     text-align: left;
   }
 
-  .table-wrap td:last-child {
+  .table-wrap:not(.rep-landscape-wrap) td:last-child {
     border-bottom: none;
   }
 
-  .table-wrap td::before {
+  .table-wrap:not(.rep-landscape-wrap) td::before {
     content: attr(data-label);
     font-weight: 700;
     color: var(--red-dark);
@@ -1027,7 +1098,7 @@ footer {
   }
 
   .lab-box-card input {
-    font-size: 13.5px;
+    font-size: 15px;
   }
 
   .lab-metric-box b {
