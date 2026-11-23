@@ -1,403 +1,283 @@
-const LAB_STORAGE_KEY = "delta_lab_analyses_v1";
+/* TAGADDOD Delta Reps - local oil sample analysis, storage & share image */
+(() => {
+  "use strict";
 
-function numVal(id) {
-  const el = document.getElementById(id);
-  if (!el || el.value === "") return 0;
-  const v = parseFloat(el.value);
-  return Number.isFinite(v) ? Math.max(0, v) : 0;
-}
-
-function fmtInputNum_(id) {
-  const el = document.getElementById(id);
-  if (!el || el.value === "") return "0";
-  const v = parseFloat(el.value);
-  return Number.isFinite(v) ? String(Math.max(0, v)) : "0";
-}
-
-function computeLabMetrics() {
-  const acidsRaw = numVal("labAcids");
-  const emptyWeight = numVal("labEmptyWeight");
-  const beforeBoil = numVal("labBeforeBoil");
-  const sedimentWeight = numVal("labSedimentWeight");
-  const afterBoil = numVal("labAfterBoil");
-
-  const netBeforeBoil = Math.max(0, beforeBoil - emptyWeight);
-  const netSediment = Math.max(0, sedimentWeight - emptyWeight);
-
-  const acidPct = acidsRaw > 0 ? acidsRaw : 0;
-
-  let waterPct = 0;
-  if (netBeforeBoil > 0 && beforeBoil > 0 && afterBoil > 0) {
-    const lostWater = Math.max(0, beforeBoil - afterBoil);
-    waterPct = Math.min(100, (lostWater / netBeforeBoil) * 100);
-  }
-
-  let sedimentPct = 0;
-  if (netBeforeBoil > 0 && netSediment > 0) {
-    sedimentPct = Math.min(100, (netSediment / netBeforeBoil) * 100);
-  }
-
-  // 1. خصم الأحماض: السماح 3%، والزيادة تتضرب في 10 كجم لكل 1%
-  const extraAcidsPct = Math.max(0, acidPct - 3);
-  const acidsDeduction = extraAcidsPct * 10;
-
-  // 2. خصم المياه والرواسب: السماح لمجموعهما 2%، والزيادة تتضرب في 10 كجم لكل 1%
-  const totalImpuritiesPct = waterPct + sedimentPct;
-  const extraImpuritiesPct = Math.max(0, totalImpuritiesPct - 2);
-  const impuritiesDeduction = extraImpuritiesPct * 10;
-
-  // إجمالي الخصم بالطن (كجم/طن)
-  const deductionPerTon = Math.round(acidsDeduction + impuritiesDeduction);
-
-  return {
-    acidPct: Number(acidPct.toFixed(2)),
-    waterPct: Number(waterPct.toFixed(2)),
-    sedimentPct: Number(sedimentPct.toFixed(2)),
-    deductionPerTon
+  const STORAGE_KEY = "delta_local_lab_analyses_v1";
+  const $ = (id) => document.getElementById(id);
+  const num = (id) => {
+    const v = Number($(id)?.value);
+    return Number.isFinite(v) ? v : 0;
   };
-}
 
-function updateLiveLabCalculations() {
-  const acidEl = document.getElementById("resAcidPct");
-  const waterEl = document.getElementById("resWaterPct");
-  const sedEl = document.getElementById("resSedimentPct");
-  const dedEl = document.getElementById("resDeductionPerTon");
+  function computeAnalysis() {
+    const clientName = ($("labClientName")?.value || "").trim() || "عميل بدون اسم";
+    const acidsInput = num("labAcids");
+    const emptyWeight = num("labEmptyWeight");
+    const beforeBoil = num("labBeforeBoil");
+    const afterBoil = num("labAfterBoil");
+    const sedimentWeight = num("labSedimentWeight");
 
-  if (!acidEl || !waterEl || !sedEl || !dedEl) return;
+    const sampleBefore = beforeBoil - emptyWeight;
+    const waterPct = sampleBefore > 0 ? Math.max(0, ((beforeBoil - afterBoil) / sampleBefore) * 100) : 0;
+    const sedimentPct = sampleBefore > 0 ? Math.max(0, (sedimentWeight / sampleBefore) * 100) : 0;
+    const acidPct = Math.max(0, acidsInput);
 
-  const metrics = computeLabMetrics();
-  acidEl.textContent = `${metrics.acidPct.toFixed(2)}%`;
-  waterEl.textContent = `${metrics.waterPct.toFixed(2)}%`;
-  sedEl.textContent = `${metrics.sedimentPct.toFixed(2)}%`;
-  dedEl.textContent = String(metrics.deductionPerTon);
-}
+    // السماح للأحماض 3%، والسماح للمياه والرواسب معًا 2%، وكل 1% زيادة = 10 كجم/طن
+    const excessAcid = Math.max(0, acidPct - 3);
+    const excessWaterSediment = Math.max(0, (waterPct + sedimentPct) - 2);
+    const deductionPerTon = Math.round((excessAcid + excessWaterSediment) * 10);
 
-function getSavedLabAnalyses() {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(LAB_STORAGE_KEY) || "[]");
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (e) {
-    return [];
+    return {
+      clientName,
+      emptyWeight,
+      beforeBoil,
+      afterBoil,
+      sedimentWeight,
+      waterPct,
+      sedimentPct,
+      acidPct,
+      deductionPerTon
+    };
   }
-}
 
-function setSavedLabAnalyses(list) {
-  localStorage.setItem(LAB_STORAGE_KEY, JSON.stringify(list));
-}
+  function updateDisplay() {
+    const res = computeAnalysis();
+    if ($("resWaterPct")) $("resWaterPct").textContent = `${res.waterPct.toFixed(2)}%`;
+    if ($("resSedimentPct")) $("resSedimentPct").textContent = `${res.sedimentPct.toFixed(2)}%`;
+    if ($("resAcidPct")) $("resAcidPct").textContent = `${res.acidPct.toFixed(2)}%`;
+    if ($("resDeductionPerTon")) $("resDeductionPerTon").textContent = String(res.deductionPerTon);
+  }
 
-function deleteSavedLabAnalysis(id) {
-  const filtered = getSavedLabAnalyses().filter((item) => item.id !== id);
-  setSavedLabAnalyses(filtered);
-  renderSavedLabAnalyses();
-  if (typeof window.showAppToast === "function") window.showAppToast("تم حذف التحليل.", "success");
-}
-
-function renderSavedLabAnalyses() {
-  const tbody = document.getElementById("savedLabAnalysisBody");
-  if (!tbody) return;
-
-  const list = getSavedLabAnalyses();
-  tbody.innerHTML = "";
-
-  list.forEach((item) => {
-    const tr = document.createElement("tr");
-    const analysisCells = [
-      { label: "العميل", value: escapeLabHtml(item.client || "-") },
-      { label: "الأحماض", value: `${Number(item.acidPct || 0).toFixed(2)}%` },
-      { label: "المياه", value: `${Number(item.waterPct || 0).toFixed(2)}%` },
-      { label: "الرواسب", value: `${Number(item.sedimentPct || 0).toFixed(2)}%` },
-      { label: "خصم/طن", value: `${Number(item.deductionPerTon || 0)} كجم` }
-    ];
-    tr.innerHTML = analysisCells.map((cell) => `<td data-label="${cell.label}">${cell.value}</td>`).join("") +
-      `<td data-label="إجراء"><button type="button" class="btn btn-danger btn-sm del-sample-btn" data-id="${escapeLabHtml(item.id)}">حذف</button></td>`;
-    const delBtn = tr.querySelector(".del-sample-btn");
-    if (delBtn) {
-      delBtn.addEventListener("click", () => deleteSavedLabAnalysis(item.id));
+  function readSaved() {
+    try {
+      const list = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+      return Array.isArray(list) ? list : [];
+    } catch (_) {
+      return [];
     }
-    tbody.appendChild(tr);
-  });
-}
-
-function escapeLabHtml(str) {
-  return String(str ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-function saveCurrentLabAnalysis() {
-  const clientInput = document.getElementById("labClientName");
-  const client = clientInput ? clientInput.value.trim() : "";
-  const metrics = computeLabMetrics();
-
-  if (!client) {
-    if (typeof window.showAppToast === "function") window.showAppToast("اكتب اسم العميل الأول.", "warning");
-    else alert("من فضلك أدخل اسم العميل أولاً.");
-    return;
   }
 
-  const entry = {
-    id: `lab_${Date.now()}`,
-    client,
-    acidPct: metrics.acidPct,
-    waterPct: metrics.waterPct,
-    sedimentPct: metrics.sedimentPct,
-    deductionPerTon: metrics.deductionPerTon
-  };
+  function writeSaved(list) {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(list.slice(0, 100)));
+    } catch (_) {}
+  }
 
-  const list = getSavedLabAnalyses();
-  list.unshift(entry);
-  setSavedLabAnalyses(list);
-  renderSavedLabAnalyses();
-  if (typeof window.showAppToast === "function") window.showAppToast("تم حفظ التحليل على الجهاز بنجاح.", "success");
-  else alert("تم حفظ التحليل محلياً على الجهاز.");
-}
+  function escapeHtml(value) {
+    return String(value ?? "").replace(/[&<>"']/g, (ch) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    }[ch]));
+  }
 
-function getCurrentLabSummaryData() {
-  const rawClient = (document.getElementById("labClientName")?.value || "").trim();
-  const titleText = rawClient ? `تحليل عينة - ${rawClient}` : "تحليل عينة";
+  function renderSavedLabAnalyses() {
+    const tbody = $("savedLabAnalysisBody");
+    if (!tbody) return;
+    const items = readSaved();
+    if (!items.length) {
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;">لا توجد تحاليل محفوظة على هذا الجهاز حتى الآن.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = items.map((item, idx) => `
+      <tr>
+        <td data-label="العميل">${escapeHtml(item.clientName)}</td>
+        <td data-label="الأحماض">${Number(item.acidPct || 0).toFixed(2)}%</td>
+        <td data-label="المياه">${Number(item.waterPct || 0).toFixed(2)}%</td>
+        <td data-label="الرواسب">${Number(item.sedimentPct || 0).toFixed(2)}%</td>
+        <td data-label="خصم/طن">${Number(item.deductionPerTon || 0)} كجم</td>
+        <td data-label="إجراء">
+          <button type="button" class="btn btn-danger btn-sm del-lab-btn" data-index="${idx}">حذف</button>
+        </td>
+      </tr>
+    `).join("");
 
-  const metrics = computeLabMetrics();
+    tbody.querySelectorAll(".del-lab-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const idx = Number(btn.dataset.index);
+        const list = readSaved().filter((_, i) => i !== idx);
+        writeSaved(list);
+        renderSavedLabAnalyses();
+        window.showAppToast?.("تم حذف التحليل المحفوظ.", "success");
+      });
+    });
+  }
+  window.renderSavedLabAnalyses = renderSavedLabAnalyses;
 
-  const weights = [
-    { label: "وزن فارغ", value: fmtInputNum_("labEmptyWeight") },
-    { label: "قبل الغليان", value: fmtInputNum_("labBeforeBoil") },
-    { label: "بعد الغليان", value: fmtInputNum_("labAfterBoil") },
-    { label: "وزن الرواسب", value: fmtInputNum_("labSedimentWeight") }
-  ];
+  function saveCurrentAnalysis() {
+    const res = computeAnalysis();
+    const list = readSaved();
+    list.unshift({
+      ...res,
+      savedAt: new Date().toISOString()
+    });
+    writeSaved(list);
+    renderSavedLabAnalyses();
+    window.showAppToast?.("تم حفظ التحليل على الجهاز.", "success");
+  }
 
-  return {
-    titleText,
-    weights,
-    water: { label: "نسبة المياه", value: `${metrics.waterPct.toFixed(2)}%` },
-    sediment: { label: "نسبة الرواسب", value: `${metrics.sedimentPct.toFixed(2)}%` },
-    acid: { label: "نسبة الأحماض", value: `${metrics.acidPct.toFixed(2)}%` },
-    deductionLabel: "الخصم بالطن (كجم/طن)",
-    deductionValue: String(metrics.deductionPerTon)
-  };
-}
+  function drawRoundedRect(ctx, x, y, w, h, r) {
+    const radius = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.arcTo(x + w, y, x + w, y + h, radius);
+    ctx.arcTo(x + w, y + h, x, y + h, radius);
+    ctx.arcTo(x, y + h, x, y, radius);
+    ctx.arcTo(x, y, x + w, y, radius);
+    ctx.closePath();
+  }
 
-function drawRoundedRect_(ctx, x, y, w, h, r) {
-  const radius = Math.min(r, w / 2, h / 2);
-  ctx.beginPath();
-  ctx.moveTo(x + radius, y);
-  ctx.arcTo(x + w, y, x + w, y + h, radius);
-  ctx.arcTo(x + w, y + h, x, y + h, radius);
-  ctx.arcTo(x, y + h, x, y, radius);
-  ctx.arcTo(x, y, x + w, y, radius);
-  ctx.closePath();
-}
-
-function renderLabCardImageBlob() {
-  return new Promise((resolve) => {
-    const data = getCurrentLabSummaryData();
-    const width = 960;
-    const height = 600;
-
+  async function shareAnalysisImage() {
+    const res = computeAnalysis();
     const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
+    canvas.width = 900;
+    canvas.height = 1040;
     const ctx = canvas.getContext("2d");
 
-    ctx.direction = "rtl";
+    // خلفية رصاصي فاتح
+    ctx.fillStyle = "#e5e7eb";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // الكارت الرئيسي أبيض بإطار أحمر
+    ctx.fillStyle = "#ffffff";
+    drawRoundedRect(ctx, 36, 36, 828, 968, 28);
+    ctx.fill();
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = "#dc2626";
+    ctx.stroke();
+
+    // هيدر علوي رصاصي غامق مع شريط أحمر
+    ctx.fillStyle = "#1f2937";
+    drawRoundedRect(ctx, 36, 36, 828, 120, 28);
+    ctx.fill();
+    ctx.fillStyle = "#dc2626";
+    ctx.fillRect(36, 146, 828, 10);
+
     ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 36px Arial, sans-serif";
+    ctx.fillText("تقرير تحليل عينة زيت · TAGADDOD", 450, 96);
 
-    ctx.fillStyle = "#0c2226";
-    ctx.fillRect(0, 0, width, height);
+    ctx.fillStyle = "#d1d5db";
+    ctx.font = "bold 20px Arial, sans-serif";
+    ctx.fillText(`العميل: ${res.clientName}`, 450, 132);
 
-    ctx.strokeStyle = "#14b8a6";
-    ctx.lineWidth = 3;
-    drawRoundedRect_(ctx, 16, 16, width - 32, height - 32, 24);
-    ctx.stroke();
-
-    ctx.fillStyle = "#f1f5f9";
-    ctx.font = "800 34px 'Segoe UI', Tahoma, sans-serif";
-    ctx.fillText(data.titleText, width / 2, 66);
-
-    ctx.strokeStyle = "#235861";
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(140, 102);
-    ctx.lineTo(width - 140, 102);
-    ctx.stroke();
-
-    const wGroupX = 44;
-    const wGroupY = 122;
-    const wGroupW = width - 88;
-    const wGroupH = 124;
-
-    ctx.fillStyle = "#102c31";
-    ctx.strokeStyle = "#214e56";
-    ctx.lineWidth = 2;
-    drawRoundedRect_(ctx, wGroupX, wGroupY, wGroupW, wGroupH, 18);
+    // صندوق الأوزان بالرصاصي والأبيض
+    ctx.fillStyle = "#f3f4f6";
+    drawRoundedRect(ctx, 70, 185, 760, 195, 20);
     ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "#9ca3af";
     ctx.stroke();
 
-    const wCount = data.weights.length;
-    const wGap = 14;
-    const wPad = 14;
-    const wCardW = (wGroupW - wPad * 2 - wGap * (wCount - 1)) / wCount;
-    const wCardH = wGroupH - wPad * 2;
-    const wCardY = wGroupY + wPad;
-
-    data.weights.forEach((item, idx) => {
-      const cardX = wGroupX + wGroupW - wPad - (idx + 1) * wCardW - idx * wGap;
-
-      ctx.fillStyle = "#14353b";
-      ctx.strokeStyle = "#2c6670";
-      ctx.lineWidth = 1.6;
-      drawRoundedRect_(ctx, cardX, wCardY, wCardW, wCardH, 13);
-      ctx.fill();
-      ctx.stroke();
-
-      ctx.fillStyle = "#cbd5e1";
-      ctx.font = "700 16px 'Segoe UI', Tahoma, sans-serif";
-      ctx.fillText(item.label, cardX + wCardW / 2, wCardY + 31);
-
+    const weights = [
+      { label: "وزن فارغ", val: res.emptyWeight.toFixed(2) },
+      { label: "قبل الغليان", val: res.beforeBoil.toFixed(2) },
+      { label: "بعد الغليان", val: res.afterBoil.toFixed(2) },
+      { label: "وزن الرواسب", val: res.sedimentWeight.toFixed(2) }
+    ];
+    weights.forEach((w, i) => {
+      const boxW = 166;
+      const gap = 16;
+      const startX = 90 + i * (boxW + gap);
       ctx.fillStyle = "#ffffff";
-      ctx.font = "800 24px 'Segoe UI', Tahoma, sans-serif";
-      ctx.fillText(item.value, cardX + wCardW / 2, wCardY + 68);
-    });
-
-    const rGroupX = 44;
-    const rGroupY = 264;
-    const rGroupW = width - 88;
-    const rGroupH = 142;
-
-    ctx.fillStyle = "#102c31";
-    ctx.strokeStyle = "#214e56";
-    ctx.lineWidth = 2;
-    drawRoundedRect_(ctx, rGroupX, rGroupY, rGroupW, rGroupH, 18);
-    ctx.fill();
-    ctx.stroke();
-
-    const ratios = [data.water, data.sediment, data.acid];
-    const rGap = 18;
-    const rPad = 16;
-    const rCardW = (rGroupW - rPad * 2 - rGap * 2) / 3;
-    const rCardH = rGroupH - rPad * 2;
-    const rCardY = rGroupY + rPad;
-
-    ratios.forEach((item, index) => {
-      const cardX = rGroupX + rGroupW - rPad - (index + 1) * rCardW - index * rGap;
-
-      ctx.fillStyle = "#14353b";
-      ctx.strokeStyle = "#2c6670";
-      ctx.lineWidth = 1.8;
-      drawRoundedRect_(ctx, cardX, rCardY, rCardW, rCardH, 14);
+      drawRoundedRect(ctx, startX, 208, boxW, 148, 14);
       ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = "#d1d5db";
       ctx.stroke();
 
-      ctx.fillStyle = "#cbd5e1";
-      ctx.font = "700 18px 'Segoe UI', Tahoma, sans-serif";
-      ctx.fillText(item.label, cardX + rCardW / 2, rCardY + 35);
+      ctx.fillStyle = "#4b5563";
+      ctx.font = "bold 20px Arial, sans-serif";
+      ctx.fillText(w.label, startX + boxW / 2, 252);
 
-      ctx.fillStyle = "#5eead4";
-      ctx.font = "800 28px 'Segoe UI', Tahoma, sans-serif";
-      ctx.fillText(item.value, cardX + rCardW / 2, rCardY + 78);
+      ctx.fillStyle = "#111827";
+      ctx.font = "bold 28px Arial, sans-serif";
+      ctx.fillText(w.val, startX + boxW / 2, 315);
     });
 
-    const dedW = 380;
-    const dedH = 100;
-    const dedX = (width - dedW) / 2;
-    const dedY = 424;
-
-    ctx.fillStyle = "#4d151a";
-    ctx.strokeStyle = "#e05252";
-    ctx.lineWidth = 2.4;
-    drawRoundedRect_(ctx, dedX, dedY, dedW, dedH, 16);
+    // صندوق النسب التلاتة جنب بعض
+    ctx.fillStyle = "#f3f4f6";
+    drawRoundedRect(ctx, 70, 410, 760, 210, 20);
     ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "#9ca3af";
     ctx.stroke();
 
-    ctx.fillStyle = "#fecaca";
-    ctx.font = "700 18px 'Segoe UI', Tahoma, sans-serif";
-    ctx.fillText(data.deductionLabel, width / 2, dedY + 30);
+    const metrics = [
+      { label: "نسبة المياه", val: `${res.waterPct.toFixed(2)}%` },
+      { label: "نسبة الرواسب", val: `${res.sedimentPct.toFixed(2)}%` },
+      { label: "نسبة الأحماض", val: `${res.acidPct.toFixed(2)}%` }
+    ];
+    metrics.forEach((m, i) => {
+      const boxW = 226;
+      const gap = 18;
+      const startX = 90 + i * (boxW + gap);
+      ctx.fillStyle = "#ffffff";
+      drawRoundedRect(ctx, startX, 435, boxW, 160, 16);
+      ctx.fill();
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = "#dc2626";
+      ctx.stroke();
+
+      ctx.fillStyle = "#374151";
+      ctx.font = "bold 22px Arial, sans-serif";
+      ctx.fillText(m.label, startX + boxW / 2, 485);
+
+      ctx.fillStyle = "#b91c1c";
+      ctx.font = "bold 34px Arial, sans-serif";
+      ctx.fillText(m.val, startX + boxW / 2, 555);
+    });
+
+    // صندوق الخصم بالطن باللون الأحمر الواضح
+    ctx.fillStyle = "#dc2626";
+    drawRoundedRect(ctx, 150, 660, 600, 175, 22);
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "#7f1d1d";
+    ctx.stroke();
+
+    ctx.fillStyle = "#fef2f2";
+    ctx.font = "bold 26px Arial, sans-serif";
+    ctx.fillText("الخصم بالطن (كجم / طن)", 450, 715);
 
     ctx.fillStyle = "#ffffff";
-    ctx.font = "800 30px 'Segoe UI', Tahoma, sans-serif";
-    ctx.fillText(data.deductionValue, width / 2, dedY + 68);
+    ctx.font = "bold 54px Arial, sans-serif";
+    ctx.fillText(`${res.deductionPerTon} كجم`, 450, 792);
 
-    ctx.direction = "ltr";
-    ctx.fillStyle = "#94a3b8";
-    ctx.font = "600 14px 'Segoe UI', Tahoma, sans-serif";
-    ctx.fillText("Designed & Structured by ALI RAGAB - TAGADDOD", width / 2, height - 34);
+    // الفوتر
+    ctx.fillStyle = "#4b5563";
+    ctx.font = "bold 19px Arial, sans-serif";
+    ctx.fillText("Designed & Structured by ALI RAGAB - TAGADDOD", 450, 910);
 
-    canvas.toBlob((blob) => resolve(blob || null), "image/png");
-  });
-}
-
-async function shareLabAnalysisAsImage() {
-  const blob = await renderLabCardImageBlob();
-  if (!blob) {
-    alert("تعذر إنشاء صورة التحليل.");
-    return;
-  }
-
-  const data = getCurrentLabSummaryData();
-  const safeClient = data.titleText.replace(/[\\/:*?"<>|]+/g, "_");
-  const fileName = `${safeClient}.png`;
-  const file = new File([blob], fileName, { type: "image/png" });
-
-  if (navigator.canShare && navigator.canShare({ files: [file] }) && typeof navigator.share === "function") {
+    const dataUrl = canvas.toDataURL("image/png");
     try {
-      await navigator.share({
-        files: [file],
-        title: data.titleText
-      });
-      if (typeof window.showAppToast === "function") window.showAppToast("تم تجهيز ومشاركة صورة التحليل.", "success");
-      return;
-    } catch (err) {
-      if (err && err.name === "AbortError") return;
-    }
+      const blob = await (await fetch(dataUrl)).blob();
+      const file = new File([blob], `تحليل_${res.clientName.replace(/\s+/g, "_")}.png`, { type: "image/png" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: "تحليل عينة زيت",
+          text: `تحليل عينة: ${res.clientName} - الخصم: ${res.deductionPerTon} كجم/طن`
+        });
+        window.showAppToast?.("تمت مشاركة صورة التحليل بنجاح.", "success");
+        return;
+      }
+    } catch (_) {}
+
+    const link = document.createElement("a");
+    link.href = dataUrl;
+    link.download = `تحليل_${res.clientName.replace(/\s+/g, "_")}.png`;
+    link.click();
+    window.showAppToast?.("تم حفظ صورة التحليل على الجهاز.", "success");
   }
 
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = fileName;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
-  if (typeof window.showAppToast === "function") window.showAppToast("تم تجهيز صورة التحليل وحفظها بنجاح.", "success");
-  else alert("تم حفظ صورة التحليل على جهازك لمشاركتها.");
-}
-
-function initLabAnalysisModule() {
-  const inputIds = [
-    "labAcids",
-    "labEmptyWeight",
-    "labBeforeBoil",
-    "labSedimentWeight",
-    "labAfterBoil"
-  ];
-
-  inputIds.forEach((id) => {
-    const el = document.getElementById(id);
-    if (el) {
-      if (el.value === "0") el.value = "";
-      el.addEventListener("focus", () => {
-        if (el.value === "0") el.value = "";
-      });
-      el.addEventListener("input", updateLiveLabCalculations);
-      el.addEventListener("change", updateLiveLabCalculations);
-    }
+  document.addEventListener("DOMContentLoaded", () => {
+    ["labClientName", "labAcids", "labEmptyWeight", "labBeforeBoil", "labAfterBoil", "labSedimentWeight"].forEach((id) => {
+      $(id)?.addEventListener("input", updateDisplay);
+      $(id)?.addEventListener("change", updateDisplay);
+    });
+    $("saveLabAnalysisBtn")?.addEventListener("click", saveCurrentAnalysis);
+    $("shareLabImageBtn")?.addEventListener("click", shareAnalysisImage);
+    updateDisplay();
+    renderSavedLabAnalyses();
   });
-
-  const saveBtn = document.getElementById("saveLabAnalysisBtn");
-  if (saveBtn) {
-    saveBtn.addEventListener("click", saveCurrentLabAnalysis);
-  }
-
-  const shareBtn = document.getElementById("shareLabImageBtn");
-  if (shareBtn) {
-    shareBtn.addEventListener("click", shareLabAnalysisAsImage);
-  }
-
-  updateLiveLabCalculations();
-  renderSavedLabAnalyses();
-}
-
-document.addEventListener("DOMContentLoaded", initLabAnalysisModule);
+})();
