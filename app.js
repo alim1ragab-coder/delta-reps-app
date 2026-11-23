@@ -384,8 +384,11 @@
       button.className = "btn btn-danger btn-sm";
       button.textContent = "حذف";
       button.addEventListener("click", async () => {
+        if (busy) return;
         if (confirm("هل تريد حذف هذا السجل نهائيًا؟")) {
+          button.disabled = true;
           await runMutation("delete_trip", { id: trip.id }, "تم حذف السجل بنجاح.", "جاري حذف السجل...");
+          button.disabled = false;
         }
       });
       cell.appendChild(button);
@@ -395,8 +398,8 @@
     const extraDaysCount = rows.filter((t) => isExtraDayTrip(t)).length;
     $("recordsSummary").textContent = `إجمالي الرحلات: ${rows.length} | إجمالي بدل السفر: ${rows.reduce((sum, t) => sum + Number(t.allowance || 0), 0).toFixed(2)} جنيه | أيام عمل إضافية: ${extraDaysCount}`;
     $("tripsPageInfo").textContent = `صفحة ${currentPage} من ${pages}`;
-    $("prevTripsPageBtn").disabled = currentPage <= 1;
-    $("nextTripsPageBtn").disabled = currentPage >= pages;
+    $("prevTripsPageBtn").disabled = currentPage <= 1 || busy;
+    $("nextTripsPageBtn").disabled = currentPage >= pages || busy;
     $("tripsPaginationBar").classList.toggle("hidden", rows.length <= CONFIG.pageSize);
   }
 
@@ -636,20 +639,42 @@
     document.querySelectorAll(".tab-btn").forEach((button) => button.addEventListener("click", () => switchTab(button.dataset.tab)));
     $("tripForm").addEventListener("submit", async (event) => {
       event.preventDefault();
-      if (!navigator.onLine) return showToast("النت فاصل. افتح النت الأول وبعد كده سجل الرحلة.", "error", 6500);
+      if (busy) return;
+      if (!navigator.onLine) return showToast("النت فاصل. افتح النت الأول وبعد كده سجل.", "error", 6500);
       if (!state.user) return openLogin();
+
       const date = $("tripDate").value;
-      const place = $("tripPlace").value.trim();
-      const client = $("tripClient").value.trim();
-      const allowance = Number($("tripAllowance").value);
       const extraDay = Boolean($("tripExtraDay")?.checked);
-      if (!date || !place || !client || !Number.isFinite(allowance) || allowance < 0) return showToast("راجع بيانات الرحلة والبدل قبل التسجيل.", "warning");
+      const rawAllowance = $("tripAllowance").value;
+      const allowance = rawAllowance === "" ? 0 : Number(rawAllowance);
+      const placeInput = $("tripPlace").value.trim();
+      const clientInput = $("tripClient").value.trim();
+
+      if (!date) return showToast("اختر التاريخ أولاً.", "warning");
+      if (!Number.isFinite(allowance) || allowance < 0) return showToast("قيمة بدل السفر غير صحيحة.", "warning");
+      if (!extraDay && (!placeInput || !clientInput)) {
+        return showToast("أدخل المكان واسم العميل، أو علّم على (يوم عمل إضافي) للتسجيل المستقل.", "warning");
+      }
+
+      const place = placeInput || (extraDay ? "يوم عمل إضافي" : "");
+      const client = clientInput || (extraDay ? "بدون عميل" : "");
+      const submitBtn = event.submitter || $("tripForm")?.querySelector('button[type="submit"]');
       const repPhone = isAdmin() ? $("tripRepSelect").value : state.user.phone;
-      const ok = await runMutation("add_trip", { date, place, client, allowance, extraDay, repPhone, timestamp: formatTimestamp(new Date()) }, "تم تسجيل رحلة جديدة بنجاح.", "جاري تسجيل الرحلة على النظام...");
+
+      if (submitBtn) submitBtn.disabled = true;
+      const ok = await runMutation(
+        "add_trip",
+        { date, place, client, allowance, extraDay, repPhone, timestamp: formatTimestamp(new Date()) },
+        extraDay && allowance === 0 ? "تم تسجيل يوم العمل الإضافي بنجاح." : "تم تسجيل البيانات بنجاح.",
+        "جاري حفظ التسجيل على النظام..."
+      );
+      if (submitBtn) submitBtn.disabled = false;
+
       if (ok) {
         $("tripPlace").value = "";
         $("tripClient").value = "";
         if ($("tripExtraDay")) $("tripExtraDay").checked = false;
+        if ($("tripAllowance")) $("tripAllowance").value = extraDay ? "0.00" : Number(state.allowance).toFixed(2);
       }
     });
     $("addRepForm").addEventListener("submit", async (event) => {
