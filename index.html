@@ -89,7 +89,7 @@
             </label>
           </form>
 
-          <!-- الصف الأول: 4 مربعات جنب بعض للأوزان -->
+          <!-- الصف الأول: مربعان وتحتهما مربعان للأوزان -->
           <div class="lab-group-box">
             <div class="lab-weights-grid">
               <label class="lab-box-card">
@@ -161,6 +161,13 @@
             <label>المكان / المحافظة<input id="tripPlace" type="text" required placeholder="المكان أو المحافظة"></label>
             <label>اسم العميل<input id="tripClient" type="text" required></label>
             <label>بدل السفر (جنيه)<input id="tripAllowance" type="number" min="0" step="0.01" required></label>
+            <label class="checkbox-field">
+              <span>يوم عمل إضافي (تسجيل فقط)</span>
+              <span class="checkbox-inline">
+                <input id="tripExtraDay" type="checkbox">
+                <span>تسجيل يوم عمل إضافي</span>
+              </span>
+            </label>
             <button type="submit" class="primary">حفظ الرحلة</button>
           </form>
           <p class="muted">يلزم الاتصال بالإنترنت لحفظ الرحلة على Google Sheets.</p>
@@ -177,13 +184,29 @@
             <button id="exportExcelBtn" class="secondary" type="button">تصدير Excel</button>
           </div>
           <p id="recordsSummary" class="summary-text">سجل الرحلات</p>
-          <div class="table-wrap"><table><thead><tr><th>الطابع الزمني</th><th>التاريخ</th><th>المندوب</th><th>المكان</th><th>العميل</th><th>بدل السفر</th><th class="admin-only hidden">إجراء</th></tr></thead><tbody id="recordsBody"></tbody></table></div>
+          <div class="table-wrap rep-landscape-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>الطابع الزمني</th>
+                  <th>التاريخ</th>
+                  <th>المندوب</th>
+                  <th>المكان</th>
+                  <th>العميل</th>
+                  <th>بدل السفر</th>
+                  <th>يوم عمل إضافي</th>
+                  <th>إجراء</th>
+                </tr>
+              </thead>
+              <tbody id="recordsBody"></tbody>
+            </table>
+          </div>
           <div id="tripsPaginationBar" class="pagination">
             <button id="prevTripsPageBtn" class="secondary" type="button">السابق</button>
             <span id="tripsPageInfo">صفحة 1 من 1</span>
             <button id="nextTripsPageBtn" class="secondary" type="button">التالي</button>
           </div>
-          <p class="muted pagination-hint">المندوب يرى رحلاته كاملة والمشرف يرى جميع الرحلات، مع عرض 15 رحلة في كل صفحة لخفة التصفح.</p>
+          <p class="muted pagination-hint">المندوب يرى رحلاته كاملة والمشرف يرى جميع الرحلات، مع عرض 10 رحلات في كل صفحة لخفة التصفح.</p>
         </div>
       </section>
 
