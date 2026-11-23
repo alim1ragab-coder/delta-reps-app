@@ -15,11 +15,26 @@
     const emptyWeight = num("labEmptyWeight");
     const beforeBoil = num("labBeforeBoil");
     const afterBoil = num("labAfterBoil");
-    const sedimentWeight = num("labSedimentWeight");
+    let sedimentWeight = num("labSedimentWeight");
 
-    const sampleBefore = beforeBoil - emptyWeight;
-    const waterPct = sampleBefore > 0 ? Math.max(0, ((beforeBoil - afterBoil) / sampleBefore) * 100) : 0;
-    const sedimentPct = sampleBefore > 0 ? Math.max(0, (sedimentWeight / sampleBefore) * 100) : 0;
+    // وزن العينة قبل الغليان وبعد الغليان بعد استبعاد الفارغ
+    const sampleBeforeBoil = Math.max(0, beforeBoil - emptyWeight);
+    const sampleAfterBoil = Math.max(0, afterBoil - emptyWeight);
+
+    // لو وزن الرواسب المدخل أكبر من وزن العينة بعد الغليان وكان يتضمن الفارغ، نطرح الفارغ تلقائياً
+    if (emptyWeight > 0 && sedimentWeight > sampleAfterBoil && (sedimentWeight - emptyWeight) <= sampleAfterBoil) {
+      sedimentWeight = Math.max(0, sedimentWeight - emptyWeight);
+    }
+
+    // حساب نسبة المياه بناءً على حالة ما بعد الغليان
+    const waterDiff = Math.max(0, beforeBoil - afterBoil);
+    const waterBase = sampleAfterBoil > 0 ? sampleAfterBoil : sampleBeforeBoil;
+    const waterPct = waterBase > 0 ? Math.min(100, (waterDiff / waterBase) * 100) : 0;
+
+    // حساب نسبة الرواسب من وزن العينة بعد الغليان (أو قبل الغليان كاحتياطي)
+    const sedimentBase = sampleAfterBoil > 0 ? sampleAfterBoil : sampleBeforeBoil;
+    const sedimentPct = sedimentBase > 0 ? Math.min(100, (Math.max(0, sedimentWeight) / sedimentBase) * 100) : 0;
+
     const acidPct = Math.max(0, acidsInput);
 
     // السماح للأحماض 3%، والسماح للمياه والرواسب معًا 2%، وكل 1% زيادة = 10 كجم/طن
@@ -132,11 +147,9 @@
     canvas.height = 1040;
     const ctx = canvas.getContext("2d");
 
-    // خلفية رصاصي فاتح
     ctx.fillStyle = "#e5e7eb";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // الكارت الرئيسي أبيض بإطار أحمر
     ctx.fillStyle = "#ffffff";
     drawRoundedRect(ctx, 36, 36, 828, 968, 28);
     ctx.fill();
@@ -144,7 +157,6 @@
     ctx.strokeStyle = "#dc2626";
     ctx.stroke();
 
-    // هيدر علوي رصاصي غامق مع شريط أحمر
     ctx.fillStyle = "#1f2937";
     drawRoundedRect(ctx, 36, 36, 828, 120, 28);
     ctx.fill();
@@ -160,7 +172,6 @@
     ctx.font = "bold 20px Arial, sans-serif";
     ctx.fillText(`العميل: ${res.clientName}`, 450, 132);
 
-    // صندوق الأوزان بالرصاصي والأبيض
     ctx.fillStyle = "#f3f4f6";
     drawRoundedRect(ctx, 70, 185, 760, 195, 20);
     ctx.fill();
@@ -194,7 +205,6 @@
       ctx.fillText(w.val, startX + boxW / 2, 315);
     });
 
-    // صندوق النسب التلاتة جنب بعض
     ctx.fillStyle = "#f3f4f6";
     drawRoundedRect(ctx, 70, 410, 760, 210, 20);
     ctx.fill();
@@ -227,7 +237,6 @@
       ctx.fillText(m.val, startX + boxW / 2, 555);
     });
 
-    // صندوق الخصم بالطن باللون الأحمر الواضح
     ctx.fillStyle = "#dc2626";
     drawRoundedRect(ctx, 150, 660, 600, 175, 22);
     ctx.fill();
@@ -243,7 +252,6 @@
     ctx.font = "bold 54px Arial, sans-serif";
     ctx.fillText(`${res.deductionPerTon} كجم`, 450, 792);
 
-    // الفوتر
     ctx.fillStyle = "#4b5563";
     ctx.font = "bold 19px Arial, sans-serif";
     ctx.fillText("Designed & Structured by ALI RAGAB - TAGADDOD", 450, 910);
