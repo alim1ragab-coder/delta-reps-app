@@ -130,121 +130,158 @@
     ctx.closePath();
   }
 
+  function fmtWeightDisplay(v) {
+    return Number.isInteger(v) ? String(v) : Number(v).toFixed(2).replace(/\.?0+$/, "");
+  }
+
   async function shareAnalysisImage() {
     const res = computeAnalysis();
     const canvas = document.createElement("canvas");
-    canvas.width = 900;
-    canvas.height = 1040;
+    canvas.width = 960;
+    canvas.height = 600;
     const ctx = canvas.getContext("2d");
 
+    ctx.direction = "rtl";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    // خلفية رصاصي ناعم
     ctx.fillStyle = "#e5e7eb";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+    // إطار رئيسي أبيض بحافة نبيتي
     ctx.fillStyle = "#ffffff";
-    drawRoundedRect(ctx, 36, 36, 828, 968, 28);
+    drawRoundedRect(ctx, 16, 16, canvas.width - 32, canvas.height - 32, 24);
     ctx.fill();
-    ctx.lineWidth = 5;
-    ctx.strokeStyle = "#dc2626";
+    ctx.lineWidth = 3.5;
+    ctx.strokeStyle = "#881337";
     ctx.stroke();
 
+    // العنوان الرئيسي
+    const hasClient = (($("labClientName")?.value || "").trim().length > 0);
     ctx.fillStyle = "#1f2937";
-    drawRoundedRect(ctx, 36, 36, 828, 120, 28);
-    ctx.fill();
-    ctx.fillStyle = "#dc2626";
-    ctx.fillRect(36, 146, 828, 10);
+    ctx.font = "800 32px 'Segoe UI', Tahoma, sans-serif";
+    ctx.fillText(hasClient ? `تحليل عينة - ${res.clientName}` : "تحليل عينة", canvas.width / 2, 64);
 
-    ctx.textAlign = "center";
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 36px Arial, sans-serif";
-    ctx.fillText("تقرير تحليل عينة زيت · TAGADDOD", 450, 96);
+    // خط فاصل رصاصي
+    ctx.strokeStyle = "#d1d5db";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(140, 100);
+    ctx.lineTo(canvas.width - 140, 100);
+    ctx.stroke();
 
-    ctx.fillStyle = "#d1d5db";
-    ctx.font = "bold 20px Arial, sans-serif";
-    ctx.fillText(`العميل: ${res.clientName}`, 450, 132);
+    // مجموعة الأوزان (4 مربعات بنفس الترتيب)
+    const wGroupX = 44;
+    const wGroupY = 120;
+    const wGroupW = canvas.width - 88;
+    const wGroupH = 124;
 
     ctx.fillStyle = "#f3f4f6";
-    drawRoundedRect(ctx, 70, 185, 760, 195, 20);
+    ctx.strokeStyle = "#cbd5e1";
+    ctx.lineWidth = 1.8;
+    drawRoundedRect(ctx, wGroupX, wGroupY, wGroupW, wGroupH, 18);
     ctx.fill();
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = "#9ca3af";
     ctx.stroke();
 
     const weights = [
-      { label: "وزن فارغ", val: res.emptyWeight.toFixed(2) },
-      { label: "قبل الغليان", val: res.beforeBoil.toFixed(2) },
-      { label: "بعد الغليان", val: res.afterBoil.toFixed(2) },
-      { label: "وزن الرواسب", val: res.sedimentWeight.toFixed(2) }
+      { label: "وزن فارغ", val: fmtWeightDisplay(res.emptyWeight) },
+      { label: "قبل الغليان", val: fmtWeightDisplay(res.beforeBoil) },
+      { label: "بعد الغليان", val: fmtWeightDisplay(res.afterBoil) },
+      { label: "وزن الرواسب", val: fmtWeightDisplay(res.sedimentWeight) }
     ];
-    weights.forEach((w, i) => {
-      const boxW = 166;
-      const gap = 16;
-      const startX = 90 + i * (boxW + gap);
+    const wGap = 14;
+    const wPad = 14;
+    const wCardW = (wGroupW - wPad * 2 - wGap * (weights.length - 1)) / weights.length;
+    const wCardH = wGroupH - wPad * 2;
+    const wCardY = wGroupY + wPad;
+
+    weights.forEach((item, idx) => {
+      const cardX = wGroupX + wGroupW - wPad - (idx + 1) * wCardW - idx * wGap;
       ctx.fillStyle = "#ffffff";
-      drawRoundedRect(ctx, startX, 208, boxW, 148, 14);
+      ctx.strokeStyle = "#9ca3af";
+      ctx.lineWidth = 1.5;
+      drawRoundedRect(ctx, cardX, wCardY, wCardW, wCardH, 13);
       ctx.fill();
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = "#d1d5db";
       ctx.stroke();
 
       ctx.fillStyle = "#4b5563";
-      ctx.font = "bold 20px Arial, sans-serif";
-      ctx.fillText(w.label, startX + boxW / 2, 252);
+      ctx.font = "700 16px 'Segoe UI', Tahoma, sans-serif";
+      ctx.fillText(item.label, cardX + wCardW / 2, wCardY + 30);
 
-      ctx.fillStyle = "#111827";
-      ctx.font = "bold 28px Arial, sans-serif";
-      ctx.fillText(w.val, startX + boxW / 2, 315);
+      ctx.fillStyle = "#1f2937";
+      ctx.font = "800 24px 'Segoe UI', Tahoma, sans-serif";
+      ctx.fillText(item.val, cardX + wCardW / 2, wCardY + 68);
     });
 
+    // مجموعة النسب (3 مربعات بنفس الترتيب)
+    const rGroupX = 44;
+    const rGroupY = 262;
+    const rGroupW = canvas.width - 88;
+    const rGroupH = 140;
+
     ctx.fillStyle = "#f3f4f6";
-    drawRoundedRect(ctx, 70, 410, 760, 210, 20);
+    ctx.strokeStyle = "#cbd5e1";
+    ctx.lineWidth = 1.8;
+    drawRoundedRect(ctx, rGroupX, rGroupY, rGroupW, rGroupH, 18);
     ctx.fill();
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = "#9ca3af";
     ctx.stroke();
 
-    const metrics = [
+    const ratios = [
       { label: "نسبة المياه", val: `${res.waterPct.toFixed(2)}%` },
       { label: "نسبة الرواسب", val: `${res.sedimentPct.toFixed(2)}%` },
       { label: "نسبة الأحماض", val: `${res.acidPct.toFixed(2)}%` }
     ];
-    metrics.forEach((m, i) => {
-      const boxW = 226;
-      const gap = 18;
-      const startX = 90 + i * (boxW + gap);
+    const rGap = 18;
+    const rPad = 16;
+    const rCardW = (rGroupW - rPad * 2 - rGap * 2) / 3;
+    const rCardH = rGroupH - rPad * 2;
+    const rCardY = rGroupY + rPad;
+
+    ratios.forEach((item, idx) => {
+      const cardX = rGroupX + rGroupW - rPad - (idx + 1) * rCardW - idx * rGap;
       ctx.fillStyle = "#ffffff";
-      drawRoundedRect(ctx, startX, 435, boxW, 160, 16);
+      ctx.strokeStyle = "#9ca3af";
+      ctx.lineWidth = 1.6;
+      drawRoundedRect(ctx, cardX, rCardY, rCardW, rCardH, 14);
       ctx.fill();
-      ctx.lineWidth = 2.5;
-      ctx.strokeStyle = "#dc2626";
       ctx.stroke();
 
-      ctx.fillStyle = "#374151";
-      ctx.font = "bold 22px Arial, sans-serif";
-      ctx.fillText(m.label, startX + boxW / 2, 485);
+      ctx.fillStyle = "#4b5563";
+      ctx.font = "700 18px 'Segoe UI', Tahoma, sans-serif";
+      ctx.fillText(item.label, cardX + rCardW / 2, rCardY + 34);
 
-      ctx.fillStyle = "#b91c1c";
-      ctx.font = "bold 34px Arial, sans-serif";
-      ctx.fillText(m.val, startX + boxW / 2, 555);
+      ctx.fillStyle = "#881337";
+      ctx.font = "800 28px 'Segoe UI', Tahoma, sans-serif";
+      ctx.fillText(item.val, cardX + rCardW / 2, rCardY + 78);
     });
 
-    ctx.fillStyle = "#dc2626";
-    drawRoundedRect(ctx, 150, 660, 600, 175, 22);
+    // مربع الخصم بالطن في المنتصف بلون نبيتي
+    const dedW = 380;
+    const dedH = 98;
+    const dedX = (canvas.width - dedW) / 2;
+    const dedY = 422;
+
+    ctx.fillStyle = "#881337";
+    ctx.strokeStyle = "#4c0519";
+    ctx.lineWidth = 2.4;
+    drawRoundedRect(ctx, dedX, dedY, dedW, dedH, 16);
     ctx.fill();
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = "#7f1d1d";
     ctx.stroke();
 
-    ctx.fillStyle = "#fef2f2";
-    ctx.font = "bold 26px Arial, sans-serif";
-    ctx.fillText("الخصم بالطن (كجم / طن)", 450, 715);
+    ctx.fillStyle = "#ffe4e6";
+    ctx.font = "700 18px 'Segoe UI', Tahoma, sans-serif";
+    ctx.fillText("الخصم بالطن (كجم/طن)", canvas.width / 2, dedY + 29);
 
     ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 54px Arial, sans-serif";
-    ctx.fillText(`${res.deductionPerTon} كجم`, 450, 792);
+    ctx.font = "800 30px 'Segoe UI', Tahoma, sans-serif";
+    ctx.fillText(String(res.deductionPerTon), canvas.width / 2, dedY + 67);
 
-    ctx.fillStyle = "#4b5563";
-    ctx.font = "bold 19px Arial, sans-serif";
-    ctx.fillText("Designed & Structured by ALI RAGAB - TAGADDOD", 450, 910);
+    // التوقيع السفلي بنفس مكان التصميم
+    ctx.direction = "ltr";
+    ctx.fillStyle = "#6b7280";
+    ctx.font = "600 14px 'Segoe UI', Tahoma, sans-serif";
+    ctx.fillText("Designed & Structured by ALI RAGAB - TAGADDOD", canvas.width / 2, canvas.height - 34);
 
     const dataUrl = canvas.toDataURL("image/png");
     try {
