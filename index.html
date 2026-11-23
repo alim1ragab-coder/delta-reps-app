@@ -142,6 +142,7 @@
           <div class="actions-row lab-actions-center">
             <button id="saveLabAnalysisBtn" type="button" class="primary">حفظ التحليل</button>
             <button id="shareLabImageBtn" type="button" class="secondary">مشاركة صورة التحليل</button>
+            <button id="clearLabFormBtn" type="button" class="secondary">تفريغ الحقول</button>
           </div>
           <p class="muted lab-note-center">السماح للأحماض 3%، والسماح للمياه والرواسب معًا 2%. كل زيادة 1% تُحسب 10 كجم لكل طن.</p>
         </div>
@@ -158,19 +159,19 @@
           <form id="tripForm" class="form-grid">
             <label>تاريخ الرحلة<input id="tripDate" type="date" required></label>
             <label>المندوب<select id="tripRepSelect" required></select></label>
-            <label>المكان / المحافظة<input id="tripPlace" type="text" required placeholder="المكان أو المحافظة"></label>
-            <label>اسم العميل<input id="tripClient" type="text" required></label>
-            <label>بدل السفر (جنيه)<input id="tripAllowance" type="number" min="0" step="0.01" required></label>
+            <label>المكان / المحافظة<input id="tripPlace" type="text" placeholder="المكان أو المحافظة"></label>
+            <label>اسم العميل<input id="tripClient" type="text" placeholder="اسم العميل"></label>
+            <label>بدل السفر (جنيه - اختياري عند يوم إضافي)<input id="tripAllowance" type="number" min="0" step="0.01" placeholder="0"></label>
             <label class="checkbox-field">
-              <span>يوم عمل إضافي (تسجيل فقط)</span>
+              <span>يوم عمل إضافي (تسجيل مستقل بدون بدل سفر)</span>
               <span class="checkbox-inline">
                 <input id="tripExtraDay" type="checkbox">
                 <span>تسجيل يوم عمل إضافي</span>
               </span>
             </label>
-            <button type="submit" class="primary">حفظ الرحلة</button>
+            <button type="submit" class="primary">حفظ التسجيل</button>
           </form>
-          <p class="muted">يلزم الاتصال بالإنترنت لحفظ الرحلة على Google Sheets.</p>
+          <p class="muted">يمكن تسجيل رحلة ببدل سفر، أو تسجيل يوم عمل إضافي لوحده بدون بدل سفر، أو الاثنين معًا.</p>
         </div>
       </section>
 
