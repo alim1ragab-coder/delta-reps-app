@@ -5,15 +5,16 @@
   const CONFIG = {
     appVersion: "1.0.0",
     updateCheckUrl: "https://raw.githubusercontent.com/aliragab-coder/delta-reps/main/version.json",
-    sheetUrl: "https://script.google.com/macros/s/AKfycbyvS1rBt0LLWheSWSH0Uk9dwKmeWF5i_T5Rr7iWSUaeS-X8dqVhHOu5rj8chF8E2Bk/exec",
+    sheetUrl: "https://script.google.com/macros/s/AKfycbytRDyjemkJ88LkmPKncEMqAQ3TWEWgy0YvH9MnFJQi-OsfbATeq3HNFD4a6fuaNrSv/exec",
     sessionKey: "delta_session_token_v5",
     cacheKey: "delta_state_cache_v5",
     pageSize: 10
   };
 
   const $ = (id) => document.getElementById(id);
-  let state = { user: null, accounts: [], trips: [], allowance: 150 };
-  let currentPage = 1;
+  let state = { user: null, accounts: [], trips: [], extraDays: [], allowance: 150 };
+  let currentTripPage = 1;
+  let currentExtraPage = 1;
   let busy = false;
   let firstLoginMode = false;
   let lastLoginPhone = "";
@@ -31,12 +32,13 @@
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
   }[ch]));
 
-  const isExtraDayTrip = (trip) => Boolean(
-    trip?.extraDay === true ||
-    trip?.extraWorkDay === true ||
-    trip?.isExtraDay === true ||
-    ["نعم", "yes", "true", "1"].includes(String(trip?.extraDay ?? trip?.extraWorkDay ?? "").trim().toLowerCase())
-  );
+  const safeImageUrl = (raw) => {
+    const val = String(raw || "").trim();
+    if (!val) return "";
+    if (/^data:image\/(png|jpeg|jpg|webp|gif);base64,/i.test(val)) return val;
+    if (/^https?:\/\//i.test(val)) return val;
+    return "";
+  };
 
   const formatTimestamp = (raw) => {
     const fallbackNow = new Date();
@@ -131,12 +133,12 @@
       });
     } catch (error) {
       if (!navigator.onLine) throw new Error("الإنترنت فاصل. افتح الإنترنت الأول وبعد كده سجل.");
-      throw new Error("تعذر تأكيد الاتصال بخدمة التسجيل. راجع سجل الرحلات قبل إعادة المحاولة حتى لا يتكرر التسجيل.");
+      throw new Error("تعذر تأكيد الاتصال بخدمة التسجيل. راجع السجل قبل إعادة المحاولة حتى لا يتكرر التسجيل.");
     } finally {
       clearTimeout(sendTimer);
     }
     for (let attempt = 0; attempt < 20; attempt += 1) {
-      if (!navigator.onLine) throw new Error("انقطع الإنترنت قبل تأكيد التسجيل. راجع سجل الرحلات قبل إعادة المحاولة.");
+      if (!navigator.onLine) throw new Error("انقطع الإنترنت قبل تأكيد التسجيل. راجع السجل قبل إعادة المحاولة.");
       const result = await apiGet({ action: "result", requestId }, 5000);
       if (result && result.pending !== true) {
         if (!result.ok) {
@@ -148,7 +150,7 @@
       }
       await sleep(450);
     }
-    throw new Error("التسجيل أُرسل لكن لم يصل تأكيد Google Sheets. راجع سجل الرحلات قبل إعادة المحاولة حتى لا يتكرر التسجيل.");
+    throw new Error("التسجيل أُرسل لكن لم يصل تأكيد Google Sheets. راجع السجل قبل إعادة المحاولة حتى لا يتكرر التسجيل.");
   }
 
   function cacheState() {
@@ -162,12 +164,20 @@
     } catch (_) {}
   }
 
+  const sortByDateDesc = (arr) => [...arr].sort(
+    (a, b) => String(b.date || "").localeCompare(String(a.date || "")) || String(b.id || "").localeCompare(String(a.id || ""))
+  );
+
   function applyServerState(data) {
     if (!data || !data.user) throw new Error("استجابة غير مكتملة من الخادم.");
+    const rawExtra = Array.isArray(data.extraDays)
+      ? data.extraDays
+      : (Array.isArray(data.extra_days) ? data.extra_days : []);
     state = {
       user: data.user,
       accounts: Array.isArray(data.accounts) ? data.accounts : [],
-      trips: (Array.isArray(data.trips) ? data.trips : []).sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")) || String(b.id || "").localeCompare(String(a.id || ""))),
+      trips: sortByDateDesc(Array.isArray(data.trips) ? data.trips : []),
+      extraDays: sortByDateDesc(rawExtra),
       allowance: Number.isFinite(Number(data.allowance)) ? Number(data.allowance) : 150
     };
     cacheState();
@@ -256,7 +266,7 @@
   }
 
   function switchTab(tabId) {
-    if (["newTripTab", "recordsTab", "adminTab"].includes(tabId) && !state.user) {
+    if (["newTripTab", "extraDayTab", "adminTab"].includes(tabId) && !state.user) {
       openLogin();
       return;
     }
@@ -266,9 +276,14 @@
     }
     document.querySelectorAll(".tab-btn").forEach((button) => button.classList.toggle("active", button.dataset.tab === tabId));
     document.querySelectorAll(".tab-panel").forEach((panel) => panel.classList.toggle("active", panel.id === tabId));
-    if (tabId === "recordsTab") {
-      currentPage = 1;
+    if (tabId === "newTripTab") {
+      currentTripPage = 1;
       renderTrips();
+      pullState(false);
+    }
+    if (tabId === "extraDayTab") {
+      currentExtraPage = 1;
+      renderExtraDays();
       pullState(false);
     }
     if (tabId === "analysisTab" && typeof renderSavedLabAnalyses === "function") renderSavedLabAnalyses();
@@ -282,8 +297,9 @@
     }
     const avatar = $("headerAvatar");
     if (avatar) {
-      avatar.src = state.user?.avatar || "";
-      avatar.classList.toggle("hidden", !state.user?.avatar);
+      const safeAv = safeImageUrl(state.user?.avatar);
+      avatar.src = safeAv;
+      avatar.classList.toggle("hidden", !safeAv);
     }
     $("logoutBtn")?.classList.toggle("hidden", !state.user);
     $("openChangePassBtn")?.classList.toggle("hidden", !state.user);
@@ -291,12 +307,19 @@
     setConnectionBadge();
   }
 
-  function renderRepSelect() {
-    const select = $("tripRepSelect");
-    if (!select || !state.user) return;
+  function renderRepSelects() {
+    if (!state.user) return;
     const reps = isAdmin() ? state.accounts : [state.user];
-    select.innerHTML = reps.map((account) => `<option value="${escapeHtml(account.phone)}">${escapeHtml(account.name)}${account.role === "admin" ? " (مشرف)" : ""}</option>`).join("");
-    select.disabled = !isAdmin();
+    const optionsHtml = reps
+      .map((account) => `<option value="${escapeHtml(account.phone)}">${escapeHtml(account.name)}${account.role === "admin" ? " (مشرف)" : ""}</option>`)
+      .join("");
+
+    ["tripRepSelect", "extraDayRepSelect"].forEach((id) => {
+      const select = $(id);
+      if (!select) return;
+      select.innerHTML = optionsHtml;
+      select.disabled = !isAdmin();
+    });
   }
 
   function renderReps() {
@@ -307,9 +330,10 @@
       const li = document.createElement("li");
       const info = document.createElement("div");
       info.className = "rep-row-info";
-      if (account.avatar) {
+      const safeAv = safeImageUrl(account.avatar);
+      if (safeAv) {
         const img = document.createElement("img");
-        img.src = account.avatar;
+        img.src = safeAv;
         img.alt = "";
         img.className = "rep-avatar-mini";
         info.appendChild(img);
@@ -333,24 +357,42 @@
     });
   }
 
-  function getVisibleTrips() {
-    const from = isAdmin() ? ($("fromDate")?.value || "") : "";
-    const to = isAdmin() ? ($("toDate")?.value || "") : "";
-    const query = isAdmin() ? (($("tripSearchInput")?.value || "").trim().toLocaleLowerCase("ar-EG")) : "";
+  function filterByUserAndRange(items, { fromId, toId, searchId, buildSearchText }) {
+    const from = isAdmin() ? ($(fromId)?.value || "") : "";
+    const to = isAdmin() ? ($(toId)?.value || "") : "";
+    const query = isAdmin() ? (($(searchId)?.value || "").trim().toLocaleLowerCase("ar-EG")) : "";
     const currentPhone = normalizePhone(state.user?.phone);
     const currentName = (state.user?.name || "").trim();
 
-    return state.trips.filter((trip) => {
+    return items.filter((item) => {
       if (!isAdmin()) {
-        const matchPhone = trip.repPhone && normalizePhone(trip.repPhone) === currentPhone;
-        const matchOwner = trip.ownerPhone && normalizePhone(trip.ownerPhone) === currentPhone;
-        const matchName = currentName && (trip.repName || "").trim() === currentName;
+        const matchPhone = item.repPhone && normalizePhone(item.repPhone) === currentPhone;
+        const matchOwner = item.ownerPhone && normalizePhone(item.ownerPhone) === currentPhone;
+        const matchName = currentName && (item.repName || "").trim() === currentName;
         if (!matchPhone && !matchOwner && !matchName) return false;
       }
-      if (from && trip.date < from) return false;
-      if (to && trip.date > to) return false;
-      const text = `${trip.repName || ""} ${trip.place || ""} ${trip.client || ""}`.toLocaleLowerCase("ar-EG");
+      if (from && item.date < from) return false;
+      if (to && item.date > to) return false;
+      const text = buildSearchText(item).toLocaleLowerCase("ar-EG");
       return !query || text.includes(query);
+    });
+  }
+
+  function getVisibleTrips() {
+    return filterByUserAndRange(state.trips, {
+      fromId: "fromDate",
+      toId: "toDate",
+      searchId: "tripSearchInput",
+      buildSearchText: (t) => `${t.repName || ""} ${t.place || ""} ${t.client || ""}`
+    });
+  }
+
+  function getVisibleExtraDays() {
+    return filterByUserAndRange(state.extraDays, {
+      fromId: "extraFromDate",
+      toId: "extraToDate",
+      searchId: "extraSearchInput",
+      buildSearchText: (d) => `${d.repName || ""} ${d.reason || d.notes || ""}`
     });
   }
 
@@ -359,21 +401,18 @@
     if (!tbody) return;
     const rows = getVisibleTrips();
     const pages = Math.max(1, Math.ceil(rows.length / CONFIG.pageSize));
-    currentPage = Math.min(Math.max(1, currentPage), pages);
-    const visible = rows.slice((currentPage - 1) * CONFIG.pageSize, currentPage * CONFIG.pageSize);
+    currentTripPage = Math.min(Math.max(1, currentTripPage), pages);
+    const visible = rows.slice((currentTripPage - 1) * CONFIG.pageSize, currentTripPage * CONFIG.pageSize);
     tbody.innerHTML = "";
     visible.forEach((trip) => {
       const tr = document.createElement("tr");
-      const formattedTs = formatTimestamp(trip.timestamp);
-      const extraDayText = isExtraDayTrip(trip) ? "نعم" : "لا";
       const tripCells = [
-        { label: "الطابع الزمني", value: formattedTs },
+        { label: "الطابع الزمني", value: formatTimestamp(trip.timestamp) },
         { label: "التاريخ", value: trip.date || "" },
         { label: "المندوب", value: trip.repName || "" },
         { label: "المكان", value: trip.place || "" },
         { label: "العميل", value: trip.client || "" },
-        { label: "بدل السفر", value: `${Number(trip.allowance || 0).toFixed(2)} ج.م` },
-        { label: "يوم عمل إضافي", value: extraDayText }
+        { label: "بدل السفر", value: `${Number(trip.allowance || 0).toFixed(2)} ج.م` }
       ];
       tr.innerHTML = tripCells.map((cell) => `<td data-label="${cell.label}">${escapeHtml(cell.value)}</td>`).join("");
 
@@ -395,19 +434,90 @@
       tr.appendChild(cell);
       tbody.appendChild(tr);
     });
-    const extraDaysCount = rows.filter((t) => isExtraDayTrip(t)).length;
-    $("recordsSummary").textContent = `إجمالي الرحلات: ${rows.length} | إجمالي بدل السفر: ${rows.reduce((sum, t) => sum + Number(t.allowance || 0), 0).toFixed(2)} جنيه | أيام عمل إضافية: ${extraDaysCount}`;
-    $("tripsPageInfo").textContent = `صفحة ${currentPage} من ${pages}`;
-    $("prevTripsPageBtn").disabled = currentPage <= 1 || busy;
-    $("nextTripsPageBtn").disabled = currentPage >= pages || busy;
-    $("tripsPaginationBar").classList.toggle("hidden", rows.length <= CONFIG.pageSize);
+    if ($("recordsSummary")) {
+      $("recordsSummary").textContent = `إجمالي الرحلات: ${rows.length} | إجمالي بدل السفر: ${rows.reduce((sum, t) => sum + Number(t.allowance || 0), 0).toFixed(2)} جنيه`;
+    }
+    if ($("tripsPageInfo")) $("tripsPageInfo").textContent = `صفحة ${currentTripPage} من ${pages}`;
+    if ($("prevTripsPageBtn")) $("prevTripsPageBtn").disabled = currentTripPage <= 1 || busy;
+    if ($("nextTripsPageBtn")) $("nextTripsPageBtn").disabled = currentTripPage >= pages || busy;
+    $("tripsPaginationBar")?.classList.toggle("hidden", rows.length <= CONFIG.pageSize);
+  }
+
+  function renderExtraDays() {
+    const tbody = $("extraRecordsBody");
+    if (!tbody) return;
+    const rows = getVisibleExtraDays();
+    const pages = Math.max(1, Math.ceil(rows.length / CONFIG.pageSize));
+    currentExtraPage = Math.min(Math.max(1, currentExtraPage), pages);
+    const visible = rows.slice((currentExtraPage - 1) * CONFIG.pageSize, currentExtraPage * CONFIG.pageSize);
+    tbody.innerHTML = "";
+
+    visible.forEach((item) => {
+      const tr = document.createElement("tr");
+      const reasonText = item.reason || item.notes || "يوم عمل إضافي";
+      const baseCells = [
+        { label: "الطابع الزمني", value: formatTimestamp(item.timestamp) },
+        { label: "التاريخ", value: item.date || "" },
+        { label: "المندوب", value: item.repName || "" },
+        { label: "السبب / الملاحظات", value: reasonText }
+      ];
+      tr.innerHTML = baseCells.map((c) => `<td data-label="${c.label}">${escapeHtml(c.value)}</td>`).join("");
+
+      const proofTd = document.createElement("td");
+      proofTd.setAttribute("data-label", "صورة الإثبات");
+      const proofSrc = safeImageUrl(item.proofImage || item.proof || item.image || "");
+      if (proofSrc) {
+        const link = document.createElement("a");
+        link.href = proofSrc;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.className = "proof-link";
+        const img = document.createElement("img");
+        img.src = proofSrc;
+        img.alt = "إثبات اليوم الإضافي";
+        img.className = "proof-thumb";
+        link.appendChild(img);
+        proofTd.appendChild(link);
+      } else {
+        proofTd.textContent = "لا يوجد";
+      }
+      tr.appendChild(proofTd);
+
+      const actionTd = document.createElement("td");
+      actionTd.setAttribute("data-label", "إجراء");
+      const delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.className = "btn btn-danger btn-sm";
+      delBtn.textContent = "حذف";
+      delBtn.addEventListener("click", async () => {
+        if (busy) return;
+        if (confirm("هل تريد حذف سجل اليوم الإضافي نهائيًا؟")) {
+          delBtn.disabled = true;
+          await runMutation("delete_extra_day", { id: item.id }, "تم حذف سجل اليوم الإضافي.", "جاري حذف السجل...");
+          delBtn.disabled = false;
+        }
+      });
+      actionTd.appendChild(delBtn);
+      tr.appendChild(actionTd);
+      tbody.appendChild(tr);
+    });
+
+    if ($("extraRecordsSummary")) {
+      const proofsCount = rows.filter((r) => Boolean(safeImageUrl(r.proofImage || r.proof || r.image || ""))).length;
+      $("extraRecordsSummary").textContent = `إجمالي أيام العمل الإضافية: ${rows.length} | إثباتات مرفقة: ${proofsCount}`;
+    }
+    if ($("extraPageInfo")) $("extraPageInfo").textContent = `صفحة ${currentExtraPage} من ${pages}`;
+    if ($("prevExtraPageBtn")) $("prevExtraPageBtn").disabled = currentExtraPage <= 1 || busy;
+    if ($("nextExtraPageBtn")) $("nextExtraPageBtn").disabled = currentExtraPage >= pages || busy;
+    $("extraPaginationBar")?.classList.toggle("hidden", rows.length <= CONFIG.pageSize);
   }
 
   function renderAll() {
     renderHeader();
-    renderRepSelect();
+    renderRepSelects();
     renderReps();
     renderTrips();
+    renderExtraDays();
     if ($("tripAllowance")) $("tripAllowance").value = Number(state.allowance).toFixed(2);
     if ($("defaultAllowanceInput")) $("defaultAllowanceInput").value = Number(state.allowance).toFixed(2);
   }
@@ -475,7 +585,7 @@
     syncAuthFields();
   }
 
-  async function readCompressedAvatar(file) {
+  async function compressImageFile(file, maxDim = 900, quality = 0.65) {
     if (!file) return "";
     if (!file.type.startsWith("image/")) throw new Error("الملف المختار ليس صورة.");
     const dataUrl = await new Promise((resolve, reject) => {
@@ -487,12 +597,12 @@
     const image = new Image();
     image.src = dataUrl;
     await image.decode();
-    const scale = Math.min(1, 180 / Math.max(image.width, image.height));
+    const scale = Math.min(1, maxDim / Math.max(image.width, image.height));
     const canvas = document.createElement("canvas");
     canvas.width = Math.max(1, Math.round(image.width * scale));
     canvas.height = Math.max(1, Math.round(image.height * scale));
     canvas.getContext("2d").drawImage(image, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL("image/jpeg", 0.55);
+    return canvas.toDataURL("image/jpeg", quality);
   }
 
   async function saveProfile() {
@@ -503,7 +613,7 @@
         phone: normalizePhone($("updatePhoneInput").value),
         currentPassword: $("currentPassInput").value,
         newPassword: $("updatedPassInput").value,
-        avatar: await readCompressedAvatar($("updateAvatarInput").files?.[0])
+        avatar: await compressImageFile($("updateAvatarInput").files?.[0], 180, 0.55)
       };
       if (!payload.phone && !payload.newPassword && !payload.avatar) return showToast("أدخل تعديلًا واحدًا على الأقل.", "warning");
       if (payload.newPassword && payload.newPassword.length < 4) return showToast("كلمة السر الجديدة يجب أن تكون 4 خانات على الأقل.", "warning");
@@ -514,6 +624,63 @@
       }
     } catch (error) {
       showToast(error.message || "تعذر تجهيز التعديلات.", "error", 6000);
+    }
+  }
+
+  function styleStyledWorkbook(ws, aoa, mainColsCount, summaryTitleRow, summaryHeaderRow, grandTotalRow, moneyColIndex) {
+    ws["!views"] = [{ RTL: true }];
+    ws["!rows"] = aoa.map((_, index) => ({
+      hpt: index === 0 || index + 1 === summaryTitleRow || index + 1 === summaryHeaderRow ? 26 : 22
+    }));
+    ws["!merges"] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: mainColsCount - 1 } },
+      { s: { r: summaryTitleRow - 1, c: 0 }, e: { r: summaryTitleRow - 1, c: 2 } }
+    ];
+
+    const border = {
+      top: { style: "thin", color: { rgb: "9CA3AF" } },
+      bottom: { style: "thin", color: { rgb: "9CA3AF" } },
+      left: { style: "thin", color: { rgb: "9CA3AF" } },
+      right: { style: "thin", color: { rgb: "9CA3AF" } }
+    };
+    const setStyle = (r, c, style) => {
+      const cell = ws[XLSX.utils.encode_cell({ r, c })];
+      if (cell) {
+        cell.s = {
+          ...style,
+          border,
+          alignment: { vertical: "center", horizontal: "center", wrapText: true, ...(style.alignment || {}) }
+        };
+      }
+    };
+    const titleStyle = { font: { name: "Arial", sz: 15, bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "991B1B" } } };
+    const headerStyle = { font: { name: "Arial", sz: 11, bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "1F2937" } } };
+    const totalStyle = { font: { name: "Arial", sz: 11, bold: true, color: { rgb: "991B1B" } }, fill: { fgColor: { rgb: "FEE2E2" } } };
+    const bodyStyle = { font: { name: "Arial", sz: 10, color: { rgb: "111827" } }, fill: { fgColor: { rgb: "FFFFFF" } } };
+
+    for (let c = 0; c < mainColsCount; c += 1) setStyle(0, c, titleStyle);
+    for (let c = 0; c < mainColsCount; c += 1) setStyle(1, c, headerStyle);
+    const dataEndRow = summaryTitleRow - 3;
+    for (let r = 2; r <= dataEndRow; r += 1) {
+      for (let c = 0; c < mainColsCount; c += 1) {
+        const style = { ...bodyStyle, fill: { fgColor: { rgb: r % 2 === 0 ? "F3F4F6" : "FFFFFF" } } };
+        if (typeof moneyColIndex === "number" && c === moneyColIndex) style.numFmt = "#,##0.00";
+        setStyle(r, c, style);
+      }
+    }
+    for (let c = 0; c < 3; c += 1) setStyle(summaryTitleRow - 1, c, titleStyle);
+    for (let c = 0; c < 3; c += 1) setStyle(summaryHeaderRow - 1, c, headerStyle);
+    for (let r = summaryHeaderRow; r < grandTotalRow - 1; r += 1) {
+      for (let c = 0; c < 3; c += 1) {
+        const style = { ...bodyStyle, fill: { fgColor: { rgb: r % 2 === 0 ? "F3F4F6" : "FFFFFF" } } };
+        if (typeof moneyColIndex === "number" && c === 2) style.numFmt = "#,##0.00";
+        setStyle(r, c, style);
+      }
+    }
+    for (let c = 0; c < 3; c += 1) {
+      const style = { ...totalStyle };
+      if (typeof moneyColIndex === "number" && c === 2) style.numFmt = "#,##0.00";
+      setStyle(grandTotalRow - 1, c, style);
     }
   }
 
@@ -530,84 +697,88 @@
       const rows = getVisibleTrips();
       const repNames = [...new Set(rows.map((trip) => trip.repName).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ar"));
       const totalAllowance = rows.reduce((sum, trip) => sum + Number(trip.allowance || 0), 0);
-      const totalExtraDays = rows.filter((trip) => isExtraDayTrip(trip)).length;
       const aoa = [
-        ["تقرير رحلات مناديب الدلتا - TAGADDOD", "", "", "", "", "", ""],
-        ["الطابع الزمني", "تاريخ الرحلة", "اسم المندوب", "المكان / المحافظة", "اسم العميل", "بدل السفر (ج.م)", "يوم عمل إضافي"],
+        ["تقرير رحلات مناديب الدلتا - TAGADDOD", "", "", "", "", ""],
+        ["الطابع الزمني", "تاريخ الرحلة", "اسم المندوب", "المكان / المحافظة", "اسم العميل", "بدل السفر (ج.م)"],
         ...rows.map((trip) => [
           formatTimestamp(trip.timestamp),
           trip.date || "",
           trip.repName || "",
           trip.place || "",
           trip.client || "",
-          Number(trip.allowance || 0),
-          isExtraDayTrip(trip) ? "نعم" : "لا"
+          Number(trip.allowance || 0)
         ])
       ];
       const summaryTitleRow = aoa.length + 2;
-      aoa.push([], ["ملخص بدل السفر وأيام العمل الإضافية حسب المندوب", "", "", ""]);
+      aoa.push([], ["ملخص بدل السفر حسب المندوب", "", ""]);
       const summaryHeaderRow = aoa.length + 1;
-      aoa.push(["اسم المندوب", "عدد الرحلات", "إجمالي بدل السفر (ج.م)", "أيام عمل إضافية"]);
+      aoa.push(["اسم المندوب", "عدد الرحلات", "إجمالي بدل السفر (ج.م)"]);
       repNames.forEach((name) => {
         const own = rows.filter((trip) => trip.repName === name);
-        const ownExtra = own.filter((trip) => isExtraDayTrip(trip)).length;
-        aoa.push([name, own.length, own.reduce((sum, trip) => sum + Number(trip.allowance || 0), 0), ownExtra]);
+        aoa.push([name, own.length, own.reduce((sum, trip) => sum + Number(trip.allowance || 0), 0)]);
       });
       const grandTotalRow = aoa.length + 1;
-      aoa.push(["الإجمالي العام", rows.length, totalAllowance, totalExtraDays]);
+      aoa.push(["الإجمالي العام", rows.length, totalAllowance]);
 
       const ws = XLSX.utils.aoa_to_sheet(aoa);
-      ws["!views"] = [{ RTL: true }];
-      ws["!cols"] = [{ wch: 24 }, { wch: 15 }, { wch: 23 }, { wch: 23 }, { wch: 27 }, { wch: 19 }, { wch: 18 }];
-      ws["!rows"] = aoa.map((_, index) => ({ hpt: index === 0 || index + 1 === summaryTitleRow || index + 1 === summaryHeaderRow ? 26 : 22 }));
-      ws["!merges"] = [
-        { s: { r: 0, c: 0 }, e: { r: 0, c: 6 } },
-        { s: { r: summaryTitleRow - 1, c: 0 }, e: { r: summaryTitleRow - 1, c: 3 } }
-      ];
+      ws["!cols"] = [{ wch: 24 }, { wch: 15 }, { wch: 23 }, { wch: 23 }, { wch: 27 }, { wch: 19 }];
+      styleStyledWorkbook(ws, aoa, 6, summaryTitleRow, summaryHeaderRow, grandTotalRow, 5);
+      ws["!autofilter"] = { ref: `A2:F${Math.max(2, rows.length + 2)}` };
 
-      const border = {
-        top: { style: "thin", color: { rgb: "9CA3AF" } },
-        bottom: { style: "thin", color: { rgb: "9CA3AF" } },
-        left: { style: "thin", color: { rgb: "9CA3AF" } },
-        right: { style: "thin", color: { rgb: "9CA3AF" } }
-      };
-      const setStyle = (r, c, style) => {
-        const cell = ws[XLSX.utils.encode_cell({ r, c })];
-        if (cell) cell.s = { ...style, border, alignment: { vertical: "center", horizontal: "center", wrapText: true, ...(style.alignment || {}) } };
-      };
-      const titleStyle = { font: { name: "Arial", sz: 15, bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "991B1B" } } };
-      const headerStyle = { font: { name: "Arial", sz: 11, bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "1F2937" } } };
-      const totalStyle = { font: { name: "Arial", sz: 11, bold: true, color: { rgb: "991B1B" } }, fill: { fgColor: { rgb: "FEE2E2" } } };
-      const bodyStyle = { font: { name: "Arial", sz: 10, color: { rgb: "111827" } }, fill: { fgColor: { rgb: "FFFFFF" } } };
-      for (let c = 0; c < 7; c += 1) setStyle(0, c, titleStyle);
-      for (let c = 0; c < 7; c += 1) setStyle(1, c, headerStyle);
-      for (let r = 2; r < rows.length + 2; r += 1) {
-        for (let c = 0; c < 7; c += 1) {
-          const style = { ...bodyStyle, fill: { fgColor: { rgb: r % 2 === 0 ? "F3F4F6" : "FFFFFF" } } };
-          if (c === 5) style.numFmt = "#,##0.00";
-          setStyle(r, c, style);
-        }
-      }
-      for (let c = 0; c < 4; c += 1) setStyle(summaryTitleRow - 1, c, titleStyle);
-      for (let c = 0; c < 4; c += 1) setStyle(summaryHeaderRow - 1, c, headerStyle);
-      const summaryStart = summaryHeaderRow;
-      for (let r = summaryStart; r < grandTotalRow - 1; r += 1) {
-        for (let c = 0; c < 4; c += 1) {
-          const style = { ...bodyStyle, fill: { fgColor: { rgb: r % 2 === 0 ? "F3F4F6" : "FFFFFF" } } };
-          if (c === 2) style.numFmt = "#,##0.00";
-          setStyle(r, c, style);
-        }
-      }
-      for (let c = 0; c < 4; c += 1) {
-        const style = { ...totalStyle };
-        if (c === 2) style.numFmt = "#,##0.00";
-        setStyle(grandTotalRow - 1, c, style);
-      }
-      ws["!autofilter"] = { ref: `A2:G${Math.max(2, rows.length + 2)}` };
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "تقرير الرحلات");
       XLSX.writeFile(wb, `تقرير_رحلات_المناديب_${from}_${to}.xlsx`);
       showToast(`تم تصدير ${rows.length} رحلة بنجاح.`, "success");
+    } catch (error) {
+      showToast(`تعذر تصدير الملف: ${error.message || "خطأ غير معروف"}`, "error", 6000);
+    }
+  }
+
+  function exportExtraDaysExcel() {
+    if (!isAdmin()) return showToast("تصدير Excel متاح للمشرف فقط.", "error");
+    if (typeof XLSX === "undefined") return showToast("مكتبة Excel لم تُحمّل. تأكد من الإنترنت ثم حاول مرة أخرى.", "error", 6000);
+    const from = $("extraFromDate")?.value || "";
+    const to = $("extraToDate")?.value || "";
+    if (!from || !to) return showToast("حدد تاريخ البداية والنهاية قبل التصدير.", "warning");
+    if (from > to) return showToast("تاريخ البداية يجب ألا يكون بعد تاريخ النهاية.", "warning");
+
+    showToast("جاري تجهيز ملف Excel لأيام العمل الإضافية...", "loading");
+    try {
+      const rows = getVisibleExtraDays();
+      const repNames = [...new Set(rows.map((item) => item.repName).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ar"));
+      const aoa = [
+        ["تقرير أيام العمل الإضافية - TAGADDOD", "", "", "", ""],
+        ["الطابع الزمني", "التاريخ", "اسم المندوب", "السبب / الملاحظات", "حالة الإثبات"],
+        ...rows.map((item) => [
+          formatTimestamp(item.timestamp),
+          item.date || "",
+          item.repName || "",
+          item.reason || item.notes || "يوم عمل إضافي",
+          safeImageUrl(item.proofImage || item.proof || item.image || "") ? "مرفق صورة" : "بدون صورة"
+        ])
+      ];
+      const summaryTitleRow = aoa.length + 2;
+      aoa.push([], ["ملخص أيام العمل الإضافية حسب المندوب", "", ""]);
+      const summaryHeaderRow = aoa.length + 1;
+      aoa.push(["اسم المندوب", "عدد الأيام الإضافية", "عدد الإثباتات المرفقة"]);
+      repNames.forEach((name) => {
+        const own = rows.filter((item) => item.repName === name);
+        const ownProofs = own.filter((item) => Boolean(safeImageUrl(item.proofImage || item.proof || item.image || ""))).length;
+        aoa.push([name, own.length, ownProofs]);
+      });
+      const grandTotalRow = aoa.length + 1;
+      const totalProofs = rows.filter((item) => Boolean(safeImageUrl(item.proofImage || item.proof || item.image || ""))).length;
+      aoa.push(["الإجمالي العام", rows.length, totalProofs]);
+
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      ws["!cols"] = [{ wch: 24 }, { wch: 15 }, { wch: 23 }, { wch: 30 }, { wch: 18 }];
+      styleStyledWorkbook(ws, aoa, 5, summaryTitleRow, summaryHeaderRow, grandTotalRow, null);
+      ws["!autofilter"] = { ref: `A2:E${Math.max(2, rows.length + 2)}` };
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "أيام العمل الإضافية");
+      XLSX.writeFile(wb, `تقرير_أيام_العمل_الإضافية_${from}_${to}.xlsx`);
+      showToast(`تم تصدير ${rows.length} سجل يوم إضافي بنجاح.`, "success");
     } catch (error) {
       showToast(`تعذر تصدير الملف: ${error.message || "خطأ غير معروف"}`, "error", 6000);
     }
@@ -630,6 +801,7 @@
       state.user = null;
       state.accounts = [];
       state.trips = [];
+      state.extraDays = [];
       cacheState();
       renderHeader();
       setView("app");
@@ -637,46 +809,68 @@
       showToast("تم تسجيل الخروج.", "success");
     });
     document.querySelectorAll(".tab-btn").forEach((button) => button.addEventListener("click", () => switchTab(button.dataset.tab)));
+
     $("tripForm").addEventListener("submit", async (event) => {
       event.preventDefault();
       if (busy) return;
-      if (!navigator.onLine) return showToast("النت فاصل. افتح النت الأول وبعد كده سجل.", "error", 6500);
+      if (!navigator.onLine) return showToast("النت فاصل. افتح النت الأول وبعد كده سجل الرحلة.", "error", 6500);
       if (!state.user) return openLogin();
-
       const date = $("tripDate").value;
-      const extraDay = Boolean($("tripExtraDay")?.checked);
-      const rawAllowance = $("tripAllowance").value;
-      const allowance = rawAllowance === "" ? 0 : Number(rawAllowance);
-      const placeInput = $("tripPlace").value.trim();
-      const clientInput = $("tripClient").value.trim();
-
-      if (!date) return showToast("اختر التاريخ أولاً.", "warning");
-      if (!Number.isFinite(allowance) || allowance < 0) return showToast("قيمة بدل السفر غير صحيحة.", "warning");
-      if (!extraDay && (!placeInput || !clientInput)) {
-        return showToast("أدخل المكان واسم العميل، أو علّم على (يوم عمل إضافي) للتسجيل المستقل.", "warning");
+      const place = $("tripPlace").value.trim();
+      const client = $("tripClient").value.trim();
+      const allowance = Number($("tripAllowance").value);
+      if (!date || !place || !client || !Number.isFinite(allowance) || allowance < 0) {
+        return showToast("راجع بيانات الرحلة والبدل قبل التسجيل.", "warning");
       }
-
-      const place = placeInput || (extraDay ? "يوم عمل إضافي" : "");
-      const client = clientInput || (extraDay ? "بدون عميل" : "");
       const submitBtn = event.submitter || $("tripForm")?.querySelector('button[type="submit"]');
       const repPhone = isAdmin() ? $("tripRepSelect").value : state.user.phone;
-
       if (submitBtn) submitBtn.disabled = true;
       const ok = await runMutation(
         "add_trip",
-        { date, place, client, allowance, extraDay, repPhone, timestamp: formatTimestamp(new Date()) },
-        extraDay && allowance === 0 ? "تم تسجيل يوم العمل الإضافي بنجاح." : "تم تسجيل البيانات بنجاح.",
-        "جاري حفظ التسجيل على النظام..."
+        { date, place, client, allowance, repPhone, timestamp: formatTimestamp(new Date()) },
+        "تم تسجيل رحلة جديدة بنجاح.",
+        "جاري تسجيل الرحلة على النظام..."
       );
       if (submitBtn) submitBtn.disabled = false;
-
       if (ok) {
         $("tripPlace").value = "";
         $("tripClient").value = "";
-        if ($("tripExtraDay")) $("tripExtraDay").checked = false;
-        if ($("tripAllowance")) $("tripAllowance").value = extraDay ? "0.00" : Number(state.allowance).toFixed(2);
       }
     });
+
+    $("extraDayForm")?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (busy) return;
+      if (!navigator.onLine) return showToast("النت فاصل. افتح النت الأول وبعد كده سجل اليوم الإضافي.", "error", 6500);
+      if (!state.user) return openLogin();
+      const date = $("extraDayDate").value;
+      const reason = $("extraDayReason").value.trim();
+      if (!date || !reason) return showToast("أدخل تاريخ اليوم الإضافي وسبب التكليف.", "warning");
+
+      const submitBtn = event.submitter || $("extraDayForm")?.querySelector('button[type="submit"]');
+      const repPhone = isAdmin() ? $("extraDayRepSelect").value : state.user.phone;
+      if (submitBtn) submitBtn.disabled = true;
+      try {
+        showToast("جاري تجهيز بيانات اليوم الإضافي...", "loading");
+        const proofImage = await compressImageFile($("extraDayProofInput")?.files?.[0], 900, 0.62);
+        busy = false;
+        const ok = await runMutation(
+          "add_extra_day",
+          { date, reason, proofImage, repPhone, timestamp: formatTimestamp(new Date()) },
+          "تم تسجيل يوم العمل الإضافي بنجاح.",
+          "جاري حفظ اليوم الإضافي على النظام..."
+        );
+        if (ok) {
+          $("extraDayReason").value = "";
+          if ($("extraDayProofInput")) $("extraDayProofInput").value = "";
+        }
+      } catch (error) {
+        showToast(error.message || "تعذر تجهيز صورة الإثبات.", "error", 6000);
+      } finally {
+        if (submitBtn) submitBtn.disabled = false;
+      }
+    });
+
     $("addRepForm").addEventListener("submit", async (event) => {
       event.preventDefault();
       if (!isAdmin()) return alert("غير مصرح.");
@@ -692,14 +886,24 @@
       if (!Number.isFinite(allowance) || allowance < 0) return showToast("أدخل قيمة بدل صحيحة.", "warning");
       await runMutation("set_allowance", { allowance }, "تم حفظ بدل السفر الافتراضي بنجاح.", "جاري حفظ بدل السفر...");
     });
-    ["fromDate", "toDate"].forEach((id) => $(id).addEventListener("change", () => { currentPage = 1; renderTrips(); }));
-    $("tripSearchInput").addEventListener("input", () => { currentPage = 1; renderTrips(); });
-    $("prevTripsPageBtn").addEventListener("click", () => { currentPage -= 1; renderTrips(); });
-    $("nextTripsPageBtn").addEventListener("click", () => { currentPage += 1; renderTrips(); });
+    ["fromDate", "toDate"].forEach((id) => $(id).addEventListener("change", () => { currentTripPage = 1; renderTrips(); }));
+    $("tripSearchInput").addEventListener("input", () => { currentTripPage = 1; renderTrips(); });
+    $("prevTripsPageBtn").addEventListener("click", () => { currentTripPage -= 1; renderTrips(); });
+    $("nextTripsPageBtn").addEventListener("click", () => { currentTripPage += 1; renderTrips(); });
     $("exportExcelBtn").addEventListener("click", exportExcel);
+
+    ["extraFromDate", "extraToDate"].forEach((id) => $(id)?.addEventListener("change", () => { currentExtraPage = 1; renderExtraDays(); }));
+    $("extraSearchInput")?.addEventListener("input", () => { currentExtraPage = 1; renderExtraDays(); });
+    $("prevExtraPageBtn")?.addEventListener("click", () => { currentExtraPage -= 1; renderExtraDays(); });
+    $("nextExtraPageBtn")?.addEventListener("click", () => { currentExtraPage += 1; renderExtraDays(); });
+    $("exportExtraExcelBtn")?.addEventListener("click", exportExtraDaysExcel);
+    $("syncExtraNowBtn")?.addEventListener("click", () => pullState(true));
+
     $("syncNowBtn").addEventListener("click", () => pullState(true));
     const today = new Date();
-    $("tripDate").value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    $("tripDate").value = todayIso;
+    if ($("extraDayDate")) $("extraDayDate").value = todayIso;
     window.addEventListener("online", () => { setConnectionBadge(); pullState(true); });
     window.addEventListener("offline", () => {
       setConnectionBadge();
@@ -725,6 +929,7 @@
         state.user = null;
         state.accounts = [];
         state.trips = [];
+        state.extraDays = [];
         cacheState();
         renderHeader();
       }
@@ -732,6 +937,7 @@
       state.user = null;
       state.accounts = [];
       state.trips = [];
+      state.extraDays = [];
       renderHeader();
     }
     setConnectionBadge();

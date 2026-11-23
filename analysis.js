@@ -289,7 +289,7 @@
     ctx.direction = "ltr";
     ctx.fillStyle = "#6b7280";
     ctx.font = "600 14px 'Segoe UI', Tahoma, sans-serif";
-    ctx.fillText("Designed & Structured by ALI RAGAB - TAGADDOD", canvas.width / 2, canvas.height - 34);
+    ctx.fillText("Designed & Structured by. ALI RAGAB - TAGADDOD", canvas.width / 2, canvas.height - 34);
 
     const dataUrl = canvas.toDataURL("image/png");
     try {

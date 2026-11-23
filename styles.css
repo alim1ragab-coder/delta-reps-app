@@ -24,7 +24,9 @@
   --lab-accent: #5eead4;
 }
 
-* {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
   -webkit-tap-highlight-color: transparent;
 }
@@ -61,7 +63,7 @@ input[type="number"] {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px 16px;
+  gap: 10px 14px;
   flex-wrap: wrap;
   border-bottom: 2px solid var(--red);
   box-shadow: 0 4px 14px rgba(15, 23, 42, 0.16);
@@ -70,19 +72,19 @@ input[type="number"] {
 .brand {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   min-width: 0;
 }
 
 .brand-mark {
-  width: 44px;
-  height: 44px;
-  border-radius: 13px;
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
   background: #ffffff;
   color: var(--red-dark);
   border: 2px solid var(--red);
   font-weight: 900;
-  font-size: 24px;
+  font-size: 21px;
   display: grid;
   place-items: center;
   flex-shrink: 0;
@@ -90,42 +92,64 @@ input[type="number"] {
 
 .brand h1 {
   margin: 0;
-  font-size: 19px;
+  font-size: 18px;
   color: #ffffff;
 }
 
 .brand small {
   color: #e5e7eb;
-  font-size: 11px;
-  letter-spacing: 0.4px;
+  font-size: 10.5px;
+  letter-spacing: 0.3px;
 }
 
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   flex-wrap: wrap;
 }
 
 .header-avatar,
 .rep-avatar-mini {
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   object-fit: cover;
   border-radius: 50%;
   border: 2px solid #ffffff;
   flex-shrink: 0;
 }
 
+.proof-thumb {
+  width: 46px;
+  height: 46px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1.5px solid var(--border);
+  display: block;
+}
+
+.proof-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--red-dark);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.proof-link:hover {
+  text-decoration: underline;
+}
+
 .user-badge {
-  font-size: 12px;
+  font-size: 11.5px;
   color: #1f2937;
   background: #ffffff;
-  padding: 4px 10px;
-  border-radius: 999px;
+  padding: 5px 10px;
+  border-radius: 9px;
   border: 1px solid #d1d5db;
   font-weight: 700;
-  max-width: 260px;
+  max-width: 240px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -133,8 +157,8 @@ input[type="number"] {
 
 .status-badge {
   font-size: 11px;
-  padding: 4px 9px;
-  border-radius: 20px;
+  padding: 5px 10px;
+  border-radius: 9px;
   white-space: nowrap;
   font-weight: 700;
 }
@@ -194,13 +218,14 @@ main {
   border: 1.5px solid var(--border);
   background: #ffffff;
   color: var(--slate);
-  padding: 10px 17px;
-  border-radius: 11px;
+  padding: 9px 14px;
+  border-radius: 10px;
   white-space: nowrap;
   cursor: pointer;
   font: inherit;
   font-weight: 700;
-  min-height: 40px;
+  min-height: 38px;
+  font-size: 13px;
 }
 
 .tab-btn.active,
@@ -243,32 +268,6 @@ select {
   min-width: 0;
 }
 
-input[type="checkbox"] {
-  width: 18px;
-  height: 18px;
-  accent-color: var(--red);
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
-.checkbox-field {
-  justify-content: flex-end;
-}
-
-.checkbox-inline {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 40px;
-  padding: 8px 11px;
-  border: 1.5px solid #cbd5e1;
-  border-radius: 9px;
-  background: #f9fafb;
-  font-size: 13px;
-  color: var(--text);
-  cursor: pointer;
-}
-
 input::placeholder {
   color: #9ca3af;
   opacity: 0.95;
@@ -285,8 +284,9 @@ button {
   cursor: pointer;
   border: 1.5px solid transparent;
   border-radius: 9px;
-  padding: 9px 14px;
-  min-height: 40px;
+  padding: 7px 12px;
+  min-height: 36px;
+  font-size: 13px;
   font-weight: 700;
 }
 
@@ -758,56 +758,57 @@ footer {
 
   .brand {
     flex: 1 1 auto;
-    gap: 10px;
+    gap: 8px;
   }
 
   .brand-mark {
-    width: 36px;
-    height: 36px;
-    font-size: 19px;
-    border-radius: 10px;
+    width: 34px;
+    height: 34px;
+    font-size: 18px;
+    border-radius: 9px;
   }
 
   .brand h1 {
-    font-size: 15px;
+    font-size: 14.5px;
   }
 
   .brand small {
-    font-size: 9.5px;
+    font-size: 9px;
   }
 
   .header-actions {
-    width: 100%;
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 7px;
+    width: auto;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
   }
 
   .header-actions button {
-    padding: 7px 8px;
-    font-size: 12px;
-    min-height: 36px;
-    width: 100%;
+    padding: 5px 10px;
+    font-size: 11.5px;
+    min-height: 32px;
+    border-radius: 8px;
+    width: auto;
     white-space: nowrap;
   }
 
   .status-badge {
     font-size: 10.5px;
     padding: 4px 8px;
-    text-align: center;
+    border-radius: 8px;
   }
 
   .user-badge {
-    grid-column: 1 / -1;
-    font-size: 11px;
-    padding: 4px 10px;
-    max-width: 100%;
-    text-align: center;
+    font-size: 10.5px;
+    padding: 4px 8px;
+    border-radius: 8px;
+    max-width: 190px;
   }
 
   .header-avatar {
-    width: 30px;
-    height: 30px;
+    width: 28px;
+    height: 28px;
   }
 
   .panel {
@@ -821,17 +822,17 @@ footer {
   }
 
   .tabs {
-    gap: 7px;
+    gap: 6px;
     margin: 8px 0 14px;
     padding-bottom: 6px;
   }
 
   .tab-btn {
-    padding: 9px 12px;
-    font-size: 12.5px;
-    border-radius: 10px;
-    flex: 1;
-    text-align: center;
+    padding: 7px 11px;
+    font-size: 12px;
+    min-height: 34px;
+    border-radius: 9px;
+    flex: 0 0 auto;
   }
 
   .form-grid {
@@ -961,7 +962,7 @@ footer {
   }
 
   .table-wrap.rep-landscape-wrap table {
-    min-width: 780px;
+    min-width: 720px;
     border-collapse: collapse;
     border-spacing: 0;
   }
@@ -1097,8 +1098,8 @@ footer {
   }
 
   .header-actions button {
-    font-size: 11.5px;
-    padding: 6px 8px;
+    font-size: 11px;
+    padding: 5px 8px;
   }
 
   .inline-form {
@@ -1107,8 +1108,9 @@ footer {
   }
 
   .user-badge {
-    max-width: 100%;
-    overflow-wrap: anywhere;
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .lab-showcase-title {
