@@ -9,6 +9,8 @@
     return Number.isFinite(v) ? v : 0;
   };
 
+  const cleanFloat = (v) => Math.round((Number(v || 0) + Number.EPSILON) * 1e9) / 1e9;
+
   function computeAnalysis() {
     const clientName = ($("labClientName")?.value || "").trim() || "عميل بدون اسم";
     const acidsInput = num("labAcids");
@@ -17,15 +19,18 @@
     const afterBoil = num("labAfterBoil");
     const sedimentWeight = num("labSedimentWeight");
 
-    const sampleDenom = beforeBoil - emptyWeight;
-    const waterPct = sampleDenom !== 0 ? Math.max(0, ((beforeBoil - afterBoil) / sampleDenom) * 100) : 0;
-    const sedimentPct = sampleDenom !== 0 ? Math.max(0, ((sedimentWeight - emptyWeight) / sampleDenom) * 100) : 0;
-    const acidPct = Math.max(0, acidsInput);
+    const sampleDenom = cleanFloat(beforeBoil - emptyWeight);
+    const waterDiff = cleanFloat(beforeBoil - afterBoil);
+    const sedimentDiff = cleanFloat(sedimentWeight - emptyWeight);
 
-    const acidPenalty = acidPct > 3 ? (acidPct - 3) * 10 : 0;
-    const wsSum = waterPct + sedimentPct;
-    const wsPenalty = wsSum > 2 ? (wsSum - 2) * 10 : 0;
-    const deductionPerTon = Math.round(acidPenalty + wsPenalty);
+    const waterPct = sampleDenom !== 0 ? Math.max(0, cleanFloat((waterDiff / sampleDenom) * 100)) : 0;
+    const sedimentPct = sampleDenom !== 0 ? Math.max(0, cleanFloat((sedimentDiff / sampleDenom) * 100)) : 0;
+    const acidPct = Math.max(0, cleanFloat(acidsInput));
+
+    const acidPenalty = acidPct > 3 ? cleanFloat((acidPct - 3) * 10) : 0;
+    const wsSum = cleanFloat(waterPct + sedimentPct);
+    const wsPenalty = wsSum > 2 ? cleanFloat((wsSum - 2) * 10) : 0;
+    const deductionPerTon = Math.round(cleanFloat(acidPenalty + wsPenalty));
 
     return {
       clientName,
