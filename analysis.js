@@ -101,14 +101,15 @@ function renderSavedLabAnalyses() {
 
   list.forEach((item) => {
     const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${escapeLabHtml(item.client || "-")}</td>
-      <td>${Number(item.acidPct || 0).toFixed(2)}%</td>
-      <td>${Number(item.waterPct || 0).toFixed(2)}%</td>
-      <td>${Number(item.sedimentPct || 0).toFixed(2)}%</td>
-      <td>${Number(item.deductionPerTon || 0)}</td>
-      <td><button type="button" class="btn btn-danger btn-sm del-sample-btn" data-id="${escapeLabHtml(item.id)}">حذف</button></td>
-    `;
+    const analysisCells = [
+      { label: "العميل", value: escapeLabHtml(item.client || "-") },
+      { label: "الأحماض", value: `${Number(item.acidPct || 0).toFixed(2)}%` },
+      { label: "المياه", value: `${Number(item.waterPct || 0).toFixed(2)}%` },
+      { label: "الرواسب", value: `${Number(item.sedimentPct || 0).toFixed(2)}%` },
+      { label: "خصم/طن", value: `${Number(item.deductionPerTon || 0)} كجم` }
+    ];
+    tr.innerHTML = analysisCells.map((cell) => `<td data-label="${cell.label}">${cell.value}</td>`).join("") +
+      `<td data-label="إجراء"><button type="button" class="btn btn-danger btn-sm del-sample-btn" data-id="${escapeLabHtml(item.id)}">حذف</button></td>`;
     const delBtn = tr.querySelector(".del-sample-btn");
     if (delBtn) {
       delBtn.addEventListener("click", () => deleteSavedLabAnalysis(item.id));

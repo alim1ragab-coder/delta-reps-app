@@ -324,9 +324,18 @@
     visible.forEach((trip) => {
       const tr = document.createElement("tr");
       const formattedTs = formatTimestamp(trip.timestamp);
-      tr.innerHTML = `<td>${escapeHtml(formattedTs)}</td><td>${escapeHtml(trip.date || "")}</td><td>${escapeHtml(trip.repName || "")}</td><td>${escapeHtml(trip.place || "")}</td><td>${escapeHtml(trip.client || "")}</td><td>${Number(trip.allowance || 0).toFixed(2)}</td>`;
+      const tripCells = [
+        { label: "الطابع الزمني", value: formattedTs },
+        { label: "التاريخ", value: trip.date || "" },
+        { label: "المندوب", value: trip.repName || "" },
+        { label: "المكان", value: trip.place || "" },
+        { label: "العميل", value: trip.client || "" },
+        { label: "بدل السفر", value: `${Number(trip.allowance || 0).toFixed(2)} ج.م` }
+      ];
+      tr.innerHTML = tripCells.map((cell) => `<td data-label="${cell.label}">${escapeHtml(cell.value)}</td>`).join("");
       if (isAdmin()) {
         const cell = document.createElement("td");
+        cell.setAttribute("data-label", "إجراء");
         const button = document.createElement("button");
         button.type = "button";
         button.className = "btn btn-danger btn-sm";

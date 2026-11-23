@@ -1,4 +1,4 @@
-const CACHE_NAME = "tagaddod-cache-teal-v3";
+const CACHE_NAME = "tagaddod-cache-teal-v4";
 const APP_SHELL = ["./", "./index.html", "./styles.css", "./app.js", "./analysis.js", "./manifest.json", "./icon.svg"];
 
 self.addEventListener("install", (event) => {
