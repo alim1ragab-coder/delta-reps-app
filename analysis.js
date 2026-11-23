@@ -15,32 +15,17 @@
     const emptyWeight = num("labEmptyWeight");
     const beforeBoil = num("labBeforeBoil");
     const afterBoil = num("labAfterBoil");
-    let sedimentWeight = num("labSedimentWeight");
+    const sedimentWeight = num("labSedimentWeight");
 
-    // وزن العينة قبل الغليان وبعد الغليان بعد استبعاد الفارغ
-    const sampleBeforeBoil = Math.max(0, beforeBoil - emptyWeight);
-    const sampleAfterBoil = Math.max(0, afterBoil - emptyWeight);
-
-    // لو وزن الرواسب المدخل أكبر من وزن العينة بعد الغليان وكان يتضمن الفارغ، نطرح الفارغ تلقائياً
-    if (emptyWeight > 0 && sedimentWeight > sampleAfterBoil && (sedimentWeight - emptyWeight) <= sampleAfterBoil) {
-      sedimentWeight = Math.max(0, sedimentWeight - emptyWeight);
-    }
-
-    // حساب نسبة المياه بناءً على حالة ما بعد الغليان
-    const waterDiff = Math.max(0, beforeBoil - afterBoil);
-    const waterBase = sampleAfterBoil > 0 ? sampleAfterBoil : sampleBeforeBoil;
-    const waterPct = waterBase > 0 ? Math.min(100, (waterDiff / waterBase) * 100) : 0;
-
-    // حساب نسبة الرواسب من وزن العينة بعد الغليان (أو قبل الغليان كاحتياطي)
-    const sedimentBase = sampleAfterBoil > 0 ? sampleAfterBoil : sampleBeforeBoil;
-    const sedimentPct = sedimentBase > 0 ? Math.min(100, (Math.max(0, sedimentWeight) / sedimentBase) * 100) : 0;
-
+    const sampleDenom = beforeBoil - emptyWeight;
+    const waterPct = sampleDenom !== 0 ? Math.max(0, ((beforeBoil - afterBoil) / sampleDenom) * 100) : 0;
+    const sedimentPct = sampleDenom !== 0 ? Math.max(0, ((sedimentWeight - emptyWeight) / sampleDenom) * 100) : 0;
     const acidPct = Math.max(0, acidsInput);
 
-    // السماح للأحماض 3%، والسماح للمياه والرواسب معًا 2%، وكل 1% زيادة = 10 كجم/طن
-    const excessAcid = Math.max(0, acidPct - 3);
-    const excessWaterSediment = Math.max(0, (waterPct + sedimentPct) - 2);
-    const deductionPerTon = Math.round((excessAcid + excessWaterSediment) * 10);
+    const acidPenalty = acidPct > 3 ? (acidPct - 3) * 10 : 0;
+    const wsSum = waterPct + sedimentPct;
+    const wsPenalty = wsSum > 2 ? (wsSum - 2) * 10 : 0;
+    const deductionPerTon = Math.round(acidPenalty + wsPenalty);
 
     return {
       clientName,
