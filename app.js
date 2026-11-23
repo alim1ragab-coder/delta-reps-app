@@ -8,7 +8,7 @@
     sheetUrl: "https://script.google.com/macros/s/AKfycbyvS1rBt0LLWheSWSH0Uk9dwKmeWF5i_T5Rr7iWSUaeS-X8dqVhHOu5rj8chF8E2Bk/exec",
     sessionKey: "delta_session_token_v5",
     cacheKey: "delta_state_cache_v5",
-    pageSize: 15
+    pageSize: 10
   };
 
   const $ = (id) => document.getElementById(id);
@@ -30,6 +30,13 @@
   const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
   }[ch]));
+
+  const isExtraDayTrip = (trip) => Boolean(
+    trip?.extraDay === true ||
+    trip?.extraWorkDay === true ||
+    trip?.isExtraDay === true ||
+    ["نعم", "yes", "true", "1"].includes(String(trip?.extraDay ?? trip?.extraWorkDay ?? "").trim().toLowerCase())
+  );
 
   const formatTimestamp = (raw) => {
     const fallbackNow = new Date();
@@ -358,31 +365,35 @@
     visible.forEach((trip) => {
       const tr = document.createElement("tr");
       const formattedTs = formatTimestamp(trip.timestamp);
+      const extraDayText = isExtraDayTrip(trip) ? "نعم" : "لا";
       const tripCells = [
         { label: "الطابع الزمني", value: formattedTs },
         { label: "التاريخ", value: trip.date || "" },
         { label: "المندوب", value: trip.repName || "" },
         { label: "المكان", value: trip.place || "" },
         { label: "العميل", value: trip.client || "" },
-        { label: "بدل السفر", value: `${Number(trip.allowance || 0).toFixed(2)} ج.م` }
+        { label: "بدل السفر", value: `${Number(trip.allowance || 0).toFixed(2)} ج.م` },
+        { label: "يوم عمل إضافي", value: extraDayText }
       ];
       tr.innerHTML = tripCells.map((cell) => `<td data-label="${cell.label}">${escapeHtml(cell.value)}</td>`).join("");
-      if (isAdmin()) {
-        const cell = document.createElement("td");
-        cell.setAttribute("data-label", "إجراء");
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = "btn btn-danger btn-sm";
-        button.textContent = "حذف";
-        button.addEventListener("click", async () => {
-          if (confirm("هل تريد حذف هذه الرحلة نهائيًا؟")) await runMutation("delete_trip", { id: trip.id }, "تم حذف الرحلة بنجاح.", "جاري حذف الرحلة...");
-        });
-        cell.appendChild(button);
-        tr.appendChild(cell);
-      }
+
+      const cell = document.createElement("td");
+      cell.setAttribute("data-label", "إجراء");
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "btn btn-danger btn-sm";
+      button.textContent = "حذف";
+      button.addEventListener("click", async () => {
+        if (confirm("هل تريد حذف هذا السجل نهائيًا؟")) {
+          await runMutation("delete_trip", { id: trip.id }, "تم حذف السجل بنجاح.", "جاري حذف السجل...");
+        }
+      });
+      cell.appendChild(button);
+      tr.appendChild(cell);
       tbody.appendChild(tr);
     });
-    $("recordsSummary").textContent = `إجمالي الرحلات: ${rows.length} | إجمالي بدل السفر: ${rows.reduce((sum, t) => sum + Number(t.allowance || 0), 0).toFixed(2)} جنيه`;
+    const extraDaysCount = rows.filter((t) => isExtraDayTrip(t)).length;
+    $("recordsSummary").textContent = `إجمالي الرحلات: ${rows.length} | إجمالي بدل السفر: ${rows.reduce((sum, t) => sum + Number(t.allowance || 0), 0).toFixed(2)} جنيه | أيام عمل إضافية: ${extraDaysCount}`;
     $("tripsPageInfo").textContent = `صفحة ${currentPage} من ${pages}`;
     $("prevTripsPageBtn").disabled = currentPage <= 1;
     $("nextTripsPageBtn").disabled = currentPage >= pages;
@@ -516,29 +527,39 @@
       const rows = getVisibleTrips();
       const repNames = [...new Set(rows.map((trip) => trip.repName).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ar"));
       const totalAllowance = rows.reduce((sum, trip) => sum + Number(trip.allowance || 0), 0);
+      const totalExtraDays = rows.filter((trip) => isExtraDayTrip(trip)).length;
       const aoa = [
-        ["تقرير رحلات مناديب الدلتا - TAGADDOD", "", "", "", "", ""],
-        ["الطابع الزمني", "تاريخ الرحلة", "اسم المندوب", "المكان / المحافظة", "اسم العميل", "بدل السفر (ج.م)"],
-        ...rows.map((trip) => [formatTimestamp(trip.timestamp), trip.date || "", trip.repName || "", trip.place || "", trip.client || "", Number(trip.allowance || 0)])
+        ["تقرير رحلات مناديب الدلتا - TAGADDOD", "", "", "", "", "", ""],
+        ["الطابع الزمني", "تاريخ الرحلة", "اسم المندوب", "المكان / المحافظة", "اسم العميل", "بدل السفر (ج.م)", "يوم عمل إضافي"],
+        ...rows.map((trip) => [
+          formatTimestamp(trip.timestamp),
+          trip.date || "",
+          trip.repName || "",
+          trip.place || "",
+          trip.client || "",
+          Number(trip.allowance || 0),
+          isExtraDayTrip(trip) ? "نعم" : "لا"
+        ])
       ];
       const summaryTitleRow = aoa.length + 2;
-      aoa.push([], ["ملخص بدل السفر حسب المندوب", "", ""]);
+      aoa.push([], ["ملخص بدل السفر وأيام العمل الإضافية حسب المندوب", "", "", ""]);
       const summaryHeaderRow = aoa.length + 1;
-      aoa.push(["اسم المندوب", "عدد الرحلات", "إجمالي بدل السفر (ج.م)"]);
+      aoa.push(["اسم المندوب", "عدد الرحلات", "إجمالي بدل السفر (ج.م)", "أيام عمل إضافية"]);
       repNames.forEach((name) => {
         const own = rows.filter((trip) => trip.repName === name);
-        aoa.push([name, own.length, own.reduce((sum, trip) => sum + Number(trip.allowance || 0), 0)]);
+        const ownExtra = own.filter((trip) => isExtraDayTrip(trip)).length;
+        aoa.push([name, own.length, own.reduce((sum, trip) => sum + Number(trip.allowance || 0), 0), ownExtra]);
       });
       const grandTotalRow = aoa.length + 1;
-      aoa.push(["الإجمالي العام", rows.length, totalAllowance]);
+      aoa.push(["الإجمالي العام", rows.length, totalAllowance, totalExtraDays]);
 
       const ws = XLSX.utils.aoa_to_sheet(aoa);
       ws["!views"] = [{ RTL: true }];
-      ws["!cols"] = [{ wch: 24 }, { wch: 15 }, { wch: 23 }, { wch: 23 }, { wch: 27 }, { wch: 19 }];
+      ws["!cols"] = [{ wch: 24 }, { wch: 15 }, { wch: 23 }, { wch: 23 }, { wch: 27 }, { wch: 19 }, { wch: 18 }];
       ws["!rows"] = aoa.map((_, index) => ({ hpt: index === 0 || index + 1 === summaryTitleRow || index + 1 === summaryHeaderRow ? 26 : 22 }));
       ws["!merges"] = [
-        { s: { r: 0, c: 0 }, e: { r: 0, c: 5 } },
-        { s: { r: summaryTitleRow - 1, c: 0 }, e: { r: summaryTitleRow - 1, c: 2 } }
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 6 } },
+        { s: { r: summaryTitleRow - 1, c: 0 }, e: { r: summaryTitleRow - 1, c: 3 } }
       ];
 
       const border = {
@@ -555,31 +576,31 @@
       const headerStyle = { font: { name: "Arial", sz: 11, bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "1F2937" } } };
       const totalStyle = { font: { name: "Arial", sz: 11, bold: true, color: { rgb: "991B1B" } }, fill: { fgColor: { rgb: "FEE2E2" } } };
       const bodyStyle = { font: { name: "Arial", sz: 10, color: { rgb: "111827" } }, fill: { fgColor: { rgb: "FFFFFF" } } };
-      for (let c = 0; c < 6; c += 1) setStyle(0, c, titleStyle);
-      for (let c = 0; c < 6; c += 1) setStyle(1, c, headerStyle);
+      for (let c = 0; c < 7; c += 1) setStyle(0, c, titleStyle);
+      for (let c = 0; c < 7; c += 1) setStyle(1, c, headerStyle);
       for (let r = 2; r < rows.length + 2; r += 1) {
-        for (let c = 0; c < 6; c += 1) {
+        for (let c = 0; c < 7; c += 1) {
           const style = { ...bodyStyle, fill: { fgColor: { rgb: r % 2 === 0 ? "F3F4F6" : "FFFFFF" } } };
           if (c === 5) style.numFmt = "#,##0.00";
           setStyle(r, c, style);
         }
       }
-      for (let c = 0; c < 3; c += 1) setStyle(summaryTitleRow - 1, c, titleStyle);
-      for (let c = 0; c < 3; c += 1) setStyle(summaryHeaderRow - 1, c, headerStyle);
+      for (let c = 0; c < 4; c += 1) setStyle(summaryTitleRow - 1, c, titleStyle);
+      for (let c = 0; c < 4; c += 1) setStyle(summaryHeaderRow - 1, c, headerStyle);
       const summaryStart = summaryHeaderRow;
       for (let r = summaryStart; r < grandTotalRow - 1; r += 1) {
-        for (let c = 0; c < 3; c += 1) {
+        for (let c = 0; c < 4; c += 1) {
           const style = { ...bodyStyle, fill: { fgColor: { rgb: r % 2 === 0 ? "F3F4F6" : "FFFFFF" } } };
           if (c === 2) style.numFmt = "#,##0.00";
           setStyle(r, c, style);
         }
       }
-      for (let c = 0; c < 3; c += 1) {
+      for (let c = 0; c < 4; c += 1) {
         const style = { ...totalStyle };
         if (c === 2) style.numFmt = "#,##0.00";
         setStyle(grandTotalRow - 1, c, style);
       }
-      ws["!autofilter"] = { ref: `A2:F${Math.max(2, rows.length + 2)}` };
+      ws["!autofilter"] = { ref: `A2:G${Math.max(2, rows.length + 2)}` };
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "تقرير الرحلات");
       XLSX.writeFile(wb, `تقرير_رحلات_المناديب_${from}_${to}.xlsx`);
@@ -621,10 +642,15 @@
       const place = $("tripPlace").value.trim();
       const client = $("tripClient").value.trim();
       const allowance = Number($("tripAllowance").value);
+      const extraDay = Boolean($("tripExtraDay")?.checked);
       if (!date || !place || !client || !Number.isFinite(allowance) || allowance < 0) return showToast("راجع بيانات الرحلة والبدل قبل التسجيل.", "warning");
       const repPhone = isAdmin() ? $("tripRepSelect").value : state.user.phone;
-      const ok = await runMutation("add_trip", { date, place, client, allowance, repPhone, timestamp: formatTimestamp(new Date()) }, "تم تسجيل رحلة جديدة بنجاح.", "جاري تسجيل الرحلة على النظام...");
-      if (ok) { $("tripPlace").value = ""; $("tripClient").value = ""; }
+      const ok = await runMutation("add_trip", { date, place, client, allowance, extraDay, repPhone, timestamp: formatTimestamp(new Date()) }, "تم تسجيل رحلة جديدة بنجاح.", "جاري تسجيل الرحلة على النظام...");
+      if (ok) {
+        $("tripPlace").value = "";
+        $("tripClient").value = "";
+        if ($("tripExtraDay")) $("tripExtraDay").checked = false;
+      }
     });
     $("addRepForm").addEventListener("submit", async (event) => {
       event.preventDefault();
