@@ -53,6 +53,14 @@
     if ($("resDeductionPerTon")) $("resDeductionPerTon").textContent = String(res.deductionPerTon);
   }
 
+  function clearLabInputs() {
+    ["labClientName", "labAcids", "labEmptyWeight", "labBeforeBoil", "labAfterBoil", "labSedimentWeight"].forEach((id) => {
+      if ($(id)) $(id).value = "";
+    });
+    updateDisplay();
+    window.showAppToast?.("تم تفريغ حقول التحليل.", "success");
+  }
+
   function readSaved() {
     try {
       const list = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
@@ -290,8 +298,7 @@
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({
           files: [file],
-          title: "تحليل عينة زيت",
-          text: `تحليل عينة: ${res.clientName} - الخصم: ${res.deductionPerTon} كجم/طن`
+          title: "تحليل عينة زيت"
         });
         window.showAppToast?.("تمت مشاركة صورة التحليل بنجاح.", "success");
         return;
@@ -312,6 +319,7 @@
     });
     $("saveLabAnalysisBtn")?.addEventListener("click", saveCurrentAnalysis);
     $("shareLabImageBtn")?.addEventListener("click", shareAnalysisImage);
+    $("clearLabFormBtn")?.addEventListener("click", clearLabInputs);
     updateDisplay();
     renderSavedLabAnalyses();
   });
