@@ -234,7 +234,7 @@
   }
 
   async function shareAnalysisImage() {
-    if (!hasCalculated) {
+        if (!hasCalculated) {
       window.showAppToast?.("اضغط احسب التحليل أولًا قبل المشاركة.", "warning");
       return;
     }
@@ -243,9 +243,11 @@
     const sharedDate = `${String(sharedAt.getDate()).padStart(2, "0")}-${String(sharedAt.getMonth() + 1).padStart(2, "0")}-${sharedAt.getFullYear()}`;
     const hour = sharedAt.getHours();
     const sharedTime = `${hour % 12 || 12}:${String(sharedAt.getMinutes()).padStart(2, "0")} ${hour >= 12 ? "م" : "ص"}`;
+    
+    // أبعاد عرضية (نسخة كمبيوتر)
     const canvas = document.createElement("canvas");
-    canvas.width = 1080;
-    canvas.height = 1180;
+    canvas.width = 1600;
+    canvas.height = 1000;
     const ctx = canvas.getContext("2d");
 
     ctx.direction = "rtl";
@@ -256,113 +258,92 @@
     ctx.fillStyle = "#e5e7eb";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // إطار رئيسي رصاصي بحافة نبيتي، مطابق لخلفية صفحة التحليل
-    ctx.fillStyle = "#d1d5db";
-    drawRoundedRect(ctx, 16, 16, canvas.width - 32, canvas.height - 32, 24);
+    // إطار رئيسي أبيض بحافة نبيتي
+    ctx.fillStyle = "#ffffff";
+    drawRoundedRect(ctx, 16, 16, canvas.width - 32, canvas.height - 32, 32);
     ctx.fill();
-    ctx.lineWidth = 3.5;
+    ctx.lineWidth = 4;
     ctx.strokeStyle = "#881337";
     ctx.stroke();
 
     // العنوان الرئيسي
     const hasClient = (($("labClientName")?.value || "").trim().length > 0);
-    ctx.fillStyle = "#881337";
-    ctx.font = "800 34px 'Segoe UI', Tahoma, sans-serif";
-    ctx.fillText("تحليل العميل", canvas.width / 2, 58, canvas.width - 80);
-    if (hasClient) {
-      ctx.fillStyle = "#881337";
-      ctx.font = "800 42px 'Segoe UI', Tahoma, sans-serif";
-      ctx.fillText(`(${res.clientName})`, canvas.width / 2, 108, canvas.width - 80);
-    }
+    ctx.fillStyle = "#1f2937";
+    ctx.font = "800 48px 'Segoe UI', Tahoma, sans-serif";
+    ctx.fillText(hasClient ? `تحليل عينة - ${res.clientName}` : "تحليل عينة", canvas.width / 2, 80);
+
+    // سطر البيانات (المندوب | التاريخ | الوقت)
+    const repName = String(window.getActiveUserName?.() || "").trim();
+    ctx.fillStyle = "#6b7280";
+    ctx.font = "600 24px 'Segoe UI', Tahoma, sans-serif";
+    const shareDetails = `${repName ? `المندوب: ${repName}  |  ` : ""}التاريخ: ${sharedDate}  |  الوقت: ${sharedTime}`;
+    ctx.fillText(shareDetails, canvas.width / 2, 140);
 
     // خط فاصل رصاصي
     ctx.strokeStyle = "#d1d5db";
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(140, 178);
-    ctx.lineTo(canvas.width - 140, 178);
-    ctx.stroke();
-
-    const repName = String(window.getActiveUserName?.() || "").trim();
-    ctx.direction = "rtl";
-    ctx.fillStyle = "#4b5563";
-    ctx.font = "700 22px 'Segoe UI', Tahoma, sans-serif";
-    const shareDetails = `${repName ? `اسم المندوب: ${repName}  |  ` : ""}الوقت: ${sharedTime}  |  التاريخ: ${sharedDate}`;
-    ctx.fillText(shareDetails, canvas.width / 2, 145, canvas.width - 96);
-
-    // الأحماض مربع صغير في المنتصف فوق أوزان البيكر
-    const acidW = 320;
-    const acidH = 92;
-    const acidX = (canvas.width - acidW) / 2;
-    const acidY = 192;
-    ctx.fillStyle = "#ffffff";
-    ctx.strokeStyle = "#881337";
     ctx.lineWidth = 2;
-    drawRoundedRect(ctx, acidX, acidY, acidW, acidH, 14);
-    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(140, 180);
+    ctx.lineTo(canvas.width - 140, 180);
     ctx.stroke();
-    ctx.fillStyle = "#4b5563";
-    ctx.font = "700 18px 'Segoe UI', Tahoma, sans-serif";
-    ctx.fillText("الأحماض", canvas.width / 2, acidY + 26);
-    ctx.fillStyle = "#1f2937";
-    ctx.font = "800 30px 'Segoe UI', Tahoma, sans-serif";
-    ctx.fillText(fmtWeightDisplay(res.acidPct), canvas.width / 2, acidY + 66);
 
-    // مجموعة الأوزان (4 مربعات بنفس الترتيب)
-    const wGroupX = 44;
-    const wGroupY = 300;
-    const wGroupW = canvas.width - 88;
-    const wGroupH = 380;
+    // ====== مجموعة الأوزان ======
+    const wGroupX = 60;
+    const wGroupY = 215;
+    const wGroupW = canvas.width - 120;
+    const wGroupH = 240;
 
-    ctx.fillStyle = "#d1d5db";
-    ctx.strokeStyle = "#cbd5e1";
-    ctx.lineWidth = 1.8;
-    drawRoundedRect(ctx, wGroupX, wGroupY, wGroupW, wGroupH, 18);
+    // الخلفية الخارجية للمجموعة (بدون إطار نبيتي عريض، بس خلفية رصاصي فاتح)
+    ctx.fillStyle = "#f3f4f6";
+    ctx.strokeStyle = "#d1d5db";
+    ctx.lineWidth = 2;
+    drawRoundedRect(ctx, wGroupX, wGroupY, wGroupW, wGroupH, 24);
     ctx.fill();
     ctx.stroke();
 
     const weights = [
-      { label: "وزن البيكر فارغ", val: fmtWeightDisplay(res.emptyWeight) },
-      { label: "وزن البيكر مليان", val: fmtWeightDisplay(res.beforeBoil) },
-      { label: "وزن البيكر بعد الغليان", val: fmtWeightDisplay(res.afterBoil) },
-      { label: "وزن الرواسب في البيكر", val: fmtWeightDisplay(res.sedimentWeight) }
+      { label: "وزن فارغ", val: fmtWeightDisplay(res.emptyWeight) },
+      { label: "قبل الغليان", val: fmtWeightDisplay(res.beforeBoil) },
+      { label: "بعد الغليان", val: fmtWeightDisplay(res.afterBoil) },
+      { label: "وزن الرواسب", val: fmtWeightDisplay(res.sedimentWeight) }
     ];
-    const wGap = 18;
-    const wPad = 18;
-    const wCardW = (wGroupW - wPad * 2 - wGap) / 2;
-    const wCardH = (wGroupH - wPad * 2 - wGap) / 2;
+    const wGap = 20;
+    const wPad = 24;
+    const wCardW = (wGroupW - wPad * 2 - wGap * 3) / 4;
+    const wCardH = wGroupH - wPad * 2;
 
     weights.forEach((item, idx) => {
-      const column = idx % 2;
-      const row = Math.floor(idx / 2);
-      const cardX = wGroupX + wGroupW - wPad - (column + 1) * wCardW - column * wGap;
-      const cardY = wGroupY + wPad + row * (wCardH + wGap);
-      ctx.fillStyle = "#fff8fa";
-      ctx.strokeStyle = "#881337";
-      ctx.lineWidth = 2.4;
+      const cardX = wGroupX + wGroupW - wPad - (idx + 1) * wCardW - idx * wGap;
+      const cardY = wGroupY + wPad;
+      
+      // المربع الداخلي (إطار نبيتي رفيع)
+      ctx.fillStyle = "#ffffff";
+      ctx.strokeStyle = "#881337"; 
+      ctx.lineWidth = 2;
       drawRoundedRect(ctx, cardX, cardY, wCardW, wCardH, 16);
       ctx.fill();
       ctx.stroke();
 
       ctx.fillStyle = "#4b5563";
-      ctx.font = "700 20px 'Segoe UI', Tahoma, sans-serif";
-      ctx.fillText(item.label, cardX + wCardW / 2, cardY + 48);
+      ctx.font = "700 22px 'Segoe UI', Tahoma, sans-serif";
+      ctx.fillText(item.label, cardX + wCardW / 2, cardY + 40);
 
+      // تكبير الرقم
       ctx.fillStyle = "#1f2937";
-      ctx.font = "800 32px 'Segoe UI', Tahoma, sans-serif";
-      ctx.fillText(item.val, cardX + wCardW / 2, cardY + 116);
+      ctx.font = "900 42px 'Segoe UI', Tahoma, sans-serif";
+      ctx.fillText(item.val, cardX + wCardW / 2, cardY + 105);
     });
 
-    // مجموعة النسب (3 مربعات بنفس الترتيب)
-    const rGroupX = 44;
-    const rGroupY = 700;
-    const rGroupW = canvas.width - 88;
-    const rGroupH = 220;
+    // ====== مجموعة النسب ======
+    const rGroupX = 60;
+    const rGroupY = 485;
+    const rGroupW = canvas.width - 120;
+    const rGroupH = 240;
 
-    ctx.fillStyle = "#d1d5db";
-    ctx.strokeStyle = "#cbd5e1";
-    ctx.lineWidth = 1.8;
-    drawRoundedRect(ctx, rGroupX, rGroupY, rGroupW, rGroupH, 18);
+    ctx.fillStyle = "#f3f4f6";
+    ctx.strokeStyle = "#d1d5db";
+    ctx.lineWidth = 2;
+    drawRoundedRect(ctx, rGroupX, rGroupY, rGroupW, rGroupH, 24);
     ctx.fill();
     ctx.stroke();
 
@@ -371,57 +352,61 @@
       { label: "نسبة الرواسب", val: `${res.sedimentPct.toFixed(2)}%` },
       { label: "نسبة الأحماض", val: `${res.acidPct.toFixed(2)}%` }
     ];
-    const rGap = 18;
-    const rPad = 18;
+    const rGap = 20;
+    const rPad = 24;
     const rCardW = (rGroupW - rPad * 2 - rGap * 2) / 3;
     const rCardH = rGroupH - rPad * 2;
-    const rCardY = rGroupY + rPad;
 
     ratios.forEach((item, idx) => {
       const cardX = rGroupX + rGroupW - rPad - (idx + 1) * rCardW - idx * rGap;
-      ctx.fillStyle = "#fff8fa";
-      ctx.strokeStyle = "#881337";
-      ctx.lineWidth = 2.4;
-      drawRoundedRect(ctx, cardX, rCardY, rCardW, rCardH, 14);
+      const cardY = rGroupY + rPad;
+      
+      // المربع الداخلي (إطار نبيتي رفيع)
+      ctx.fillStyle = "#ffffff";
+      ctx.strokeStyle = "#881337"; 
+      ctx.lineWidth = 2;
+      drawRoundedRect(ctx, cardX, cardY, rCardW, rCardH, 16);
       ctx.fill();
       ctx.stroke();
 
       ctx.fillStyle = "#4b5563";
-      ctx.font = "700 20px 'Segoe UI', Tahoma, sans-serif";
-      ctx.fillText(item.label, cardX + rCardW / 2, rCardY + 48);
+      ctx.font = "700 24px 'Segoe UI', Tahoma, sans-serif";
+      ctx.fillText(item.label, cardX + rCardW / 2, cardY + 45);
 
+      // تكبير الرقم
       ctx.fillStyle = "#881337";
-      ctx.font = "800 32px 'Segoe UI', Tahoma, sans-serif";
-      ctx.fillText(item.val, cardX + rCardW / 2, rCardY + 118);
+      ctx.font = "900 48px 'Segoe UI', Tahoma, sans-serif";
+      ctx.fillText(item.val, cardX + rCardW / 2, cardY + 120);
     });
 
-    // مربع الخصم بالطن في المنتصف بلون نبيتي
-    const dedW = 442;
-    const dedH = 128;
+    // ====== مربع الخصم ======
+    const dedW = 500;
+    const dedH = 140;
     const dedX = (canvas.width - dedW) / 2;
-    const dedY = 915;
+    const dedY = 760;
 
     ctx.fillStyle = "#881337";
     ctx.strokeStyle = "#4c0519";
-    ctx.lineWidth = 2.4;
-    drawRoundedRect(ctx, dedX, dedY, dedW, dedH, 16);
+    ctx.lineWidth = 3;
+    drawRoundedRect(ctx, dedX, dedY, dedW, dedH, 24);
     ctx.fill();
     ctx.stroke();
 
     ctx.fillStyle = "#ffe4e6";
-    ctx.font = "700 22px 'Segoe UI', Tahoma, sans-serif";
-    ctx.fillText("الخصم بالطن (كجم/طن)", canvas.width / 2, dedY + 38);
+    ctx.font = "700 24px 'Segoe UI', Tahoma, sans-serif";
+    ctx.fillText("الخصم بالطن (كجم/طن)", canvas.width / 2, dedY + 45);
 
     ctx.fillStyle = "#ffffff";
-    ctx.font = "800 38px 'Segoe UI', Tahoma, sans-serif";
-    ctx.fillText(String(res.deductionPerTon), canvas.width / 2, dedY + 92);
+    ctx.font = "900 54px 'Segoe UI', Tahoma, sans-serif";
+    ctx.fillText(String(res.deductionPerTon), canvas.width / 2, dedY + 105);
 
-    // التوقيع السفلي بنفس مكان التصميم
+    // التوقيع السفلي
     ctx.direction = "ltr";
-    ctx.fillStyle = "#6b7280";
-    ctx.font = "700 18px 'Segoe UI', Tahoma, sans-serif";
-    ctx.fillText("Programmed by .Ali Ragab - TAGADDOD", canvas.width / 2, canvas.height - 58);
+    ctx.fillStyle = "#9ca3af";
+    ctx.font = "600 18px 'Segoe UI', Tahoma, sans-serif";
+    ctx.fillText("Designed & Structured by. ALI RAGAB - TAGADDOD", canvas.width / 2, canvas.height - 40);
 
+    // توليد الصورة والمشاركة
     const dataUrl = canvas.toDataURL("image/png");
     try {
       const blob = await (await fetch(dataUrl)).blob();
