@@ -6,6 +6,7 @@
   const $ = (id) => document.getElementById(id);
   const deletingAnalysisIds = new Set();
   let hasCalculated = false;
+
   async function withAnalysisButtonProgress(button, loadingMessage, action) {
     if (!button || button.dataset.actionPending === "true") return false;
     const originalText = button.textContent;
@@ -25,6 +26,7 @@
       if (button.isConnected) button.textContent = originalText;
     }
   }
+
   const num = (id) => {
     const v = Number($(id)?.value);
     return Number.isFinite(v) ? v : 0;
@@ -234,7 +236,7 @@
   }
 
   async function shareAnalysisImage() {
-        if (!hasCalculated) {
+    if (!hasCalculated) {
       window.showAppToast?.("اضغط احسب التحليل أولًا قبل المشاركة.", "warning");
       return;
     }
@@ -243,11 +245,11 @@
     const sharedDate = `${String(sharedAt.getDate()).padStart(2, "0")}-${String(sharedAt.getMonth() + 1).padStart(2, "0")}-${sharedAt.getFullYear()}`;
     const hour = sharedAt.getHours();
     const sharedTime = `${hour % 12 || 12}:${String(sharedAt.getMinutes()).padStart(2, "0")} ${hour >= 12 ? "م" : "ص"}`;
-    
+
     // أبعاد عرضية (نسخة كمبيوتر)
     const canvas = document.createElement("canvas");
     canvas.width = 1600;
-    canvas.height = 1000;
+    canvas.height = 1045;
     const ctx = canvas.getContext("2d");
 
     ctx.direction = "rtl";
@@ -270,13 +272,13 @@
     const hasClient = (($("labClientName")?.value || "").trim().length > 0);
     ctx.fillStyle = "#1f2937";
     ctx.font = "800 56px 'Segoe UI', Tahoma, sans-serif";
-    ctx.fillText("تحليل عينة", canvas.width / 2, 80);
+    ctx.fillText("تحليل عينة", canvas.width / 2, 76);
 
     // اسم العميل - بلون مميز (نبيتي)
     if (hasClient) {
-      ctx.fillStyle = "#881337"; // لون نبيتي غامق مميز
-      ctx.font = "900 52px 'Segoe UI', Tahoma, sans-serif";
-      ctx.fillText(`(${res.clientName})`, canvas.width / 2, 145);
+      ctx.fillStyle = "#881337";
+      ctx.font = "900 50px 'Segoe UI', Tahoma, sans-serif";
+      ctx.fillText(`(${res.clientName})`, canvas.width / 2, 138);
     }
 
     // سطر البيانات (المندوب | التاريخ | الوقت)
@@ -284,21 +286,22 @@
     ctx.fillStyle = "#6b7280";
     ctx.font = "600 30px 'Segoe UI', Tahoma, sans-serif";
     const shareDetails = `${repName ? `المندوب: ${repName}  |  ` : ""}التاريخ: ${sharedDate}  |  الوقت: ${sharedTime}`;
-    ctx.fillText(shareDetails, canvas.width / 2, 205);
+    ctx.fillText(shareDetails, canvas.width / 2, hasClient ? 196 : 165);
 
     // خط فاصل رصاصي
+    const dividerY = hasClient ? 234 : 210;
     ctx.strokeStyle = "#d1d5db";
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(140, 245);
-    ctx.lineTo(canvas.width - 140, 245);
+    ctx.moveTo(140, dividerY);
+    ctx.lineTo(canvas.width - 140, dividerY);
     ctx.stroke();
 
     // ====== مجموعة الأوزان ======
     const wGroupX = 60;
-    const wGroupY = 275;
+    const wGroupY = dividerY + 26;
     const wGroupW = canvas.width - 120;
-    const wGroupH = 240;
+    const wGroupH = 235;
 
     ctx.fillStyle = "#f3f4f6";
     ctx.strokeStyle = "#d1d5db";
@@ -321,9 +324,9 @@
     weights.forEach((item, idx) => {
       const cardX = wGroupX + wGroupW - wPad - (idx + 1) * wCardW - idx * wGap;
       const cardY = wGroupY + wPad;
-      
+
       ctx.fillStyle = "#ffffff";
-      ctx.strokeStyle = "#881337"; 
+      ctx.strokeStyle = "#881337";
       ctx.lineWidth = 2;
       drawRoundedRect(ctx, cardX, cardY, wCardW, wCardH, 16);
       ctx.fill();
@@ -331,18 +334,18 @@
 
       ctx.fillStyle = "#4b5563";
       ctx.font = "700 26px 'Segoe UI', Tahoma, sans-serif";
-      ctx.fillText(item.label, cardX + wCardW / 2, cardY + 40);
+      ctx.fillText(item.label, cardX + wCardW / 2, cardY + 42);
 
       ctx.fillStyle = "#1f2937";
       ctx.font = "900 48px 'Segoe UI', Tahoma, sans-serif";
-      ctx.fillText(item.val, cardX + wCardW / 2, cardY + 110);
+      ctx.fillText(item.val, cardX + wCardW / 2, cardY + 115);
     });
 
     // ====== مجموعة النسب ======
     const rGroupX = 60;
-    const rGroupY = 535; // تم النزول شوية لاستيعاب العنوان الجديد
+    const rGroupY = wGroupY + wGroupH + 22;
     const rGroupW = canvas.width - 120;
-    const rGroupH = 240;
+    const rGroupH = 235;
 
     ctx.fillStyle = "#f3f4f6";
     ctx.strokeStyle = "#d1d5db";
@@ -364,9 +367,9 @@
     ratios.forEach((item, idx) => {
       const cardX = rGroupX + rGroupW - rPad - (idx + 1) * rCardW - idx * rGap;
       const cardY = rGroupY + rPad;
-      
+
       ctx.fillStyle = "#ffffff";
-      ctx.strokeStyle = "#881337"; 
+      ctx.strokeStyle = "#881337";
       ctx.lineWidth = 2;
       drawRoundedRect(ctx, cardX, cardY, rCardW, rCardH, 16);
       ctx.fill();
@@ -383,9 +386,9 @@
 
     // ====== مربع الخصم ======
     const dedW = 540;
-    const dedH = 150;
+    const dedH = 148;
     const dedX = (canvas.width - dedW) / 2;
-    const dedY = 800;
+    const dedY = rGroupY + rGroupH + 26;
 
     ctx.fillStyle = "#881337";
     ctx.strokeStyle = "#4c0519";
@@ -396,17 +399,18 @@
 
     ctx.fillStyle = "#ffe4e6";
     ctx.font = "700 28px 'Segoe UI', Tahoma, sans-serif";
-    ctx.fillText("الخصم (كجم/طن)", canvas.width / 2, dedY + 45);
+    ctx.fillText("الخصم (كجم/طن)", canvas.width / 2, dedY + 44);
 
     ctx.fillStyle = "#ffffff";
-    ctx.font = "900 64px 'Segoe UI', Tahoma, sans-serif";
-    ctx.fillText(String(res.deductionPerTon), canvas.width / 2, dedY + 110);
+    ctx.font = "900 62px 'Segoe UI', Tahoma, sans-serif";
+    ctx.fillText(String(res.deductionPerTon), canvas.width / 2, dedY + 106);
 
-    // التوقيع السفلي
+    // ====== التوقيع السفلي المنسق ======
+    const footerY = dedY + dedH + 42;
     ctx.direction = "ltr";
-    ctx.fillStyle = "#9ca3af";
-    ctx.font = "600 20px 'Segoe UI', Tahoma, sans-serif";
-    ctx.fillText("Structured by. ALI M.RAGAB - TAGADDOD", canvas.width / 2, canvas.height - 40);
+    ctx.fillStyle = "#6b7280";
+    ctx.font = "700 22px 'Segoe UI', Tahoma, sans-serif";
+    ctx.fillText("Structured by ALI M. RAGAB  •  TAGADDOD", canvas.width / 2, footerY);
 
     // توليد الصورة والمشاركة
     const dataUrl = canvas.toDataURL("image/png");
