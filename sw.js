@@ -1,5 +1,5 @@
-const CACHE_NAME = "tagaddod-cache-async-action-feedback-v25";
-const APP_SHELL = ["./", "./index.html", "./styles.css?v=async-action-feedback-v1", "./app.js?v=async-action-feedback-v1", "./analysis.js?v=async-action-feedback-v1", "./manifest.json", "./icon.png", "./icon.svg"];
+const CACHE_NAME = "tagaddod-cache-app-startup-lab-palette-v27";
+const APP_SHELL = ["./", "./index.html", "./styles.css?v=app-startup-lab-palette-v3", "./app.js?v=app-startup-lab-palette-v2", "./analysis.js?v=async-action-feedback-v1", "./manifest.json", "./icon.png", "./icon.svg"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -22,15 +22,21 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(request.url);
   if (request.method !== "GET" || url.origin !== self.location.origin) return;
   if (url.pathname.includes("/exec")) return;
+  const networkPromise = fetch(request, { cache: "no-cache" }).then((response) => {
+    if (response && response.ok) {
+      const copy = response.clone();
+      caches.open(CACHE_NAME).then((cache) => cache.put(request, copy)).catch(() => {});
+    }
+    return response;
+  });
+  event.waitUntil(networkPromise.then(() => {}, () => {}));
   event.respondWith(
-    fetch(request, { cache: "no-cache" })
-      .then((response) => {
-        if (response && response.ok) {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
-        }
-        return response;
-      })
-      .catch(() => caches.match(request).then((cached) => cached || caches.match("./index.html")))
+    caches.match(request).then((cached) => {
+      if (cached) return cached;
+      return networkPromise.catch((error) => {
+        if (request.mode === "navigate") return caches.match("./index.html");
+        throw error;
+      });
+    })
   );
 });

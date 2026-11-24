@@ -15,13 +15,12 @@
   --danger-bg: #fee2e2;
   --danger-text: #991b1b;
 
-  /* هوية منطقة التحاليل فقط: اللون البترولي */
-  --lab-bg: #0c2226;
-  --lab-panel: #102c31;
-  --lab-card: #14353b;
-  --lab-border: #2c6670;
-  --lab-teal: #14b8a6;
-  --lab-accent: #5eead4;
+  /* منطقة التحاليل: رمادي هادئ مع لمسات نبيتي */
+  --lab-bg: #e5e7eb;
+  --lab-panel: #d1d5db;
+  --lab-card: #f9fafb;
+  --lab-border: #cbd5e1;
+  --lab-accent: #881337;
 }
 
 *,
@@ -581,39 +580,37 @@ tbody tr:nth-child(even) {
   font-size: 12px;
 }
 
-/* ============================================================
-   منطقة التحاليل فقط: الهوية البترولية الكاملة
-   ============================================================ */
+/* منطقة التحاليل: رمادي فاتح وأبيض مع لمسات نبيتي */
 .lab-showcase-panel {
-  border: 2.5px solid var(--lab-teal);
+  border: 2px solid #9f1239;
   border-radius: 22px;
   padding: 20px 14px;
   background: var(--lab-bg);
-  color: #f1f5f9;
-  box-shadow: 0 10px 26px rgba(12, 34, 38, 0.28);
+  color: var(--text);
+  box-shadow: 0 8px 22px rgba(31, 41, 55, 0.1);
 }
 
 .lab-showcase-panel label {
-  color: #e2e8f0;
+  color: var(--slate);
 }
 
 .lab-showcase-panel input {
-  background: #0b1e22;
-  color: #ffffff;
-  border-color: #2b5c66;
+  background: #ffffff;
+  color: var(--text);
+  border-color: #cbd5e1;
 }
 
 .lab-showcase-panel input::placeholder {
-  color: #7c9aa1;
+  color: #9ca3af;
 }
 
 .lab-showcase-panel input:focus {
-  outline: 2px solid rgba(20, 184, 166, 0.45);
-  border-color: var(--lab-teal);
+  outline: 2px solid rgba(136, 19, 55, 0.18);
+  border-color: #881337;
 }
 
 .lab-showcase-panel .muted {
-  color: #94a3b8;
+  color: var(--muted);
 }
 
 .lab-showcase-title {
@@ -621,12 +618,12 @@ tbody tr:nth-child(even) {
   font-size: 28px !important;
   font-weight: 800;
   margin: 0 0 12px !important;
-  color: #f8fafc !important;
+  color: #881337 !important;
 }
 
 .lab-showcase-divider {
   height: 1.5px;
-  background: #235861;
+  background: #e5c4ce;
   width: min(76%, 640px);
   margin: 0 auto 18px;
 }
@@ -640,7 +637,7 @@ tbody tr:nth-child(even) {
 
 .lab-group-box {
   background: var(--lab-panel);
-  border: 1.5px solid #214e56;
+  border: 1.5px solid #e5c4ce;
   border-radius: 18px;
   padding: 12px;
   margin-bottom: 16px;
@@ -669,7 +666,7 @@ tbody tr:nth-child(even) {
 .lab-box-card span {
   font-size: clamp(13px, 2.5vw, 16px);
   font-weight: 700;
-  color: #cbd5e1;
+  color: var(--slate-light);
   white-space: nowrap;
 }
 
@@ -679,9 +676,9 @@ tbody tr:nth-child(even) {
   font-size: clamp(17px, 3.2vw, 22px);
   font-weight: 800;
   letter-spacing: 0.2px;
-  color: #ffffff;
-  background: #0b1f23;
-  border: 1px solid #357b87;
+  color: var(--text);
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
   border-radius: 10px;
   padding: 9px 6px;
 }
@@ -705,7 +702,7 @@ tbody tr:nth-child(even) {
 .lab-metric-box span {
   display: block;
   font-size: clamp(11px, 2.7vw, 16px);
-  color: #cbd5e1;
+  color: var(--slate-light);
   margin-bottom: 6px;
   font-weight: 700;
   white-space: nowrap;
@@ -725,24 +722,24 @@ tbody tr:nth-child(even) {
 }
 
 .analysis-deduction-box {
-  width: min(100%, 400px);
-  padding: 14px 18px;
-  background: #4d151a;
-  border: 2.2px solid #e05252;
+  width: min(100%, 200px);
+  padding: 8px 10px;
+  background: #881337;
+  border: 2px solid #6b102e;
   border-radius: 16px;
   text-align: center;
 }
 
 .analysis-deduction-box span {
   display: block;
-  font-size: 16px;
-  color: #fecaca;
+  font-size: 13px;
+  color: #fce7f3;
   margin-bottom: 6px;
   font-weight: 700;
 }
 
 .analysis-deduction-box b {
-  font-size: 28px;
+  font-size: 22px;
   color: #ffffff;
   font-weight: 800;
 }
@@ -750,7 +747,7 @@ tbody tr:nth-child(even) {
 .lab-card-footer {
   text-align: center;
   direction: ltr;
-  color: #94a3b8;
+  color: var(--muted);
   font-size: 13px;
   font-weight: 600;
   margin: 6px 0 14px;
@@ -763,6 +760,24 @@ tbody tr:nth-child(even) {
 .lab-note-center {
   text-align: center;
   margin-top: 10px;
+}
+
+.lab-saved-panel {
+  border-color: #e5c4ce;
+  background: #e5e7eb;
+}
+
+.lab-saved-panel h2 {
+  color: #881337;
+}
+
+.lab-saved-panel th {
+  background: #881337 !important;
+  border-color: #6b102e !important;
+}
+
+.lab-saved-panel tbody tr:nth-child(even) {
+  background: #f9f7f8;
 }
 
 .reps-list {
@@ -1072,16 +1087,15 @@ footer {
   }
 
   .analysis-deduction-box {
-    width: 100%;
-    padding: 12px 14px;
+    padding: 7px 9px;
   }
 
   .analysis-deduction-box span {
-    font-size: 14px;
+    font-size: 12px;
   }
 
   .analysis-deduction-box b {
-    font-size: 24px;
+    font-size: 20px;
   }
 
   .lab-card-footer {

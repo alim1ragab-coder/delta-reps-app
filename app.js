@@ -524,6 +524,41 @@
     }
   }
 
+  function clearInvalidSession() {
+    localStorage.removeItem(CONFIG.sessionKey);
+    state.user = null;
+    state.accounts = [];
+    state.trips = [];
+    cacheState();
+    renderHeader();
+  }
+
+  function isInvalidSessionError(message) {
+    return message.startsWith("انتهت الجلسة") || message === "الحساب غير موجود.";
+  }
+
+  async function restoreSessionInBackground() {
+    const loaded = await pullState(false);
+    if (loaded) {
+      await syncMutationQueue();
+      return;
+    }
+
+    if (isInvalidSessionError(lastStateError)) {
+      clearInvalidSession();
+      showToast("انتهت الجلسة. سجل الدخول مرة أخرى.", "warning", 6000);
+      return;
+    }
+
+    showToast(
+      lastStateError
+        ? `تعذر تحديث البيانات الآن. ${lastStateError} يتم عرض البيانات المحفوظة إن وُجدت.`
+        : "تعذر تحديث البيانات الآن. يتم عرض البيانات المحفوظة إن وُجدت.",
+      "warning",
+      7000
+    );
+  }
+
   async function runMutation(action, payload, successMessage, loadingMessage = "جاري تنفيذ العملية...") {
     if (mutationBusy) {
       showToast("هناك عملية أخرى قيد التنفيذ. انتظر تأكيدها ثم حاول مرة أخرى.", "warning", 5000);
@@ -1392,43 +1427,31 @@
     window.setInterval(() => { if (navigator.onLine) syncMutationQueue(); }, 15000);
   }
 
-  async function init() {
-    setAppLoading(true);
-    try {
-      readCachedState();
-      readMutationQueue();
-      bindEvents();
-      renderHeader();
-      renderAll();
-      setView("app");
-      switchTab("analysisTab");
-      if (sessionToken()) {
-        const loaded = await pullState(false);
-        if (loaded) {
-          setView("app");
-          switchTab("analysisTab");
-          await syncMutationQueue();
-        } else if (!navigator.onLine) {
-          setStatus("غير متصل. تظهر الطلبات المحفوظة كمعلّقة ولن تُحسب قبل تأكيدها في Google Sheets.", "warning");
-        } else {
-          localStorage.removeItem(CONFIG.sessionKey);
-          state.user = null;
-          state.accounts = [];
-          state.trips = [];
-          cacheState();
-          renderHeader();
-        }
+  function init() {
+    readCachedState();
+    readMutationQueue();
+    bindEvents();
+    renderHeader();
+    renderAll();
+    setView("app");
+    switchTab("analysisTab");
+    setConnectionBadge();
+
+    if (sessionToken()) {
+      if (navigator.onLine) {
+        restoreSessionInBackground().catch((error) => {
+          showToast(error.message || "تعذر تحديث البيانات الآن.", "error", 7000);
+        });
       } else {
-        state.user = null;
-        state.accounts = [];
-        state.trips = [];
-        renderHeader();
+        setStatus("غير متصل. تظهر البيانات المحفوظة والطلبات المعلّقة حتى عودة الاتصال.", "warning");
       }
-      setConnectionBadge();
-      checkForAppUpdate(false);
-    } finally {
-      setAppLoading(false);
+    } else {
+      state.user = null;
+      state.accounts = [];
+      state.trips = [];
+      renderHeader();
     }
+    checkForAppUpdate(false);
   }
 
   document.addEventListener("DOMContentLoaded", init);
