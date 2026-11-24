@@ -1,5 +1,5 @@
-const CACHE_NAME = "tagaddod-cache-mobile-wine-v38";
-const APP_SHELL = ["./", "./index.html", "./styles.css?v=mobile-wine-v5", "./app.js?v=mobile-wine-v5", "./analysis.js?v=ops-gray-v3", "./manifest.json", "./icon.png", "./icon.svg"];
+const CACHE_NAME = "tagaddod-cache-mobile-wine-v47";
+const APP_SHELL = ["./", "./index.html", "./styles.css?v=mobile-wine-v7", "./app.js?v=mobile-wine-v7", "./analysis.js?v=mobile-share-v10", "./manifest.json", "./icon.png", "./icon.svg"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

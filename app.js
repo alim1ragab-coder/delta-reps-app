@@ -708,7 +708,9 @@
     document.querySelectorAll(".tab-panel").forEach((panel) => panel.classList.toggle("active", panel.id === tabId));
     if (tabId === "recordsTab") {
       currentPage = 1;
+      extraCurrentPage = 1;
       renderTrips();
+      renderExtraDays();
       pullState(false);
     }
     if (tabId === "extraDayTab") {
@@ -893,6 +895,8 @@
     if (!tbody) return;
     const rows = getVisibleTrips();
     const localTripCount = queuedLocalRecords("add_trip").length;
+    $("tripAllowanceHeader")?.classList.toggle("hidden", !isAdmin());
+    $("tripStatusHeader")?.classList.toggle("hidden", false);
     const pages = Math.max(1, Math.ceil((state.tripCount + localTripCount) / CONFIG.pageSize));
     currentPage = Math.min(Math.max(1, currentPage), pages);
     const visible = rows;
@@ -905,16 +909,20 @@
         { label: "التاريخ", value: trip.date || "" },
         { label: "المندوب", value: trip.repName || "" },
         { label: "المكان", value: trip.place || "" },
-        { label: "العميل", value: trip.client || "" },
-        { label: "بدل السفر", value: `${Number(trip.allowance || 0).toFixed(2)} ج.م` }
+        { label: "العميل", value: trip.client || "" }
       ];
+      if (isAdmin()) {
+        tripCells.push({ label: "بدل السفر", value: `${Number(trip.allowance || 0).toFixed(2)} ج.م` });
+      }
       tr.innerHTML = tripCells.map((cell) => `<td data-label="${cell.label}">${escapeHtml(cell.value)}</td>`).join("");
       const statusCell = document.createElement("td");
       statusCell.setAttribute("data-label", "الحالة");
       const reviewQueueItem = !trip.isLocalQueue ? queuedReview("trip", trip.id) : null;
       const tripStatus = displayedReviewStatus("trip", trip);
-      statusCell.appendChild(createReviewStatus(tripStatus));
-      if (reviewQueueItem) appendQueueControls(statusCell, reviewQueueItem);
+      if (isAdmin() || tripStatus === "approved" || tripStatus === "rejected") {
+        statusCell.appendChild(createReviewStatus(tripStatus));
+        if (reviewQueueItem) appendQueueControls(statusCell, reviewQueueItem);
+      }
       if (isAdmin() && trip.status === "pending" && !reviewQueueItem) {
         const controls = document.createElement("div");
         controls.className = "review-actions";
@@ -1156,8 +1164,10 @@
       statusCell.setAttribute("data-label","الحالة");
       const reviewQueueItem = !item.isLocalQueue ? queuedReview("extra", item.id) : null;
       const itemStatus = displayedReviewStatus("extra", item);
-      statusCell.appendChild(createReviewStatus(itemStatus));
-      if (reviewQueueItem) appendQueueControls(statusCell, reviewQueueItem);
+      if (isAdmin() || itemStatus === "approved" || itemStatus === "rejected") {
+        statusCell.appendChild(createReviewStatus(itemStatus));
+        if (reviewQueueItem) appendQueueControls(statusCell, reviewQueueItem);
+      }
       if (isAdmin() && item.status === "pending" && !reviewQueueItem) {
         const controls = document.createElement("div");
         controls.className = "review-actions";

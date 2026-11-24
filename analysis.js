@@ -5,6 +5,7 @@
   const STORAGE_KEY = "delta_local_lab_analyses_v1";
   const $ = (id) => document.getElementById(id);
   const deletingAnalysisIds = new Set();
+  let hasCalculated = false;
   async function withAnalysisButtonProgress(button, loadingMessage, action) {
     if (!button || button.dataset.actionPending === "true") return false;
     const originalText = button.textContent;
@@ -66,6 +67,13 @@
   }
 
   function updateDisplay() {
+    if (!hasCalculated) {
+      if ($("resWaterPct")) $("resWaterPct").textContent = "0.00%";
+      if ($("resSedimentPct")) $("resSedimentPct").textContent = "0.00%";
+      if ($("resAcidPct")) $("resAcidPct").textContent = "0.00%";
+      if ($("resDeductionPerTon")) $("resDeductionPerTon").textContent = "0";
+      return;
+    }
     const res = computeAnalysis();
     if ($("resWaterPct")) $("resWaterPct").textContent = `${res.waterPct.toFixed(2)}%`;
     if ($("resSedimentPct")) $("resSedimentPct").textContent = `${res.sedimentPct.toFixed(2)}%`;
@@ -77,6 +85,7 @@
     ["labClientName", "labAcids", "labEmptyWeight", "labBeforeBoil", "labAfterBoil", "labSedimentWeight"].forEach((id) => {
       if ($(id)) $(id).value = "";
     });
+    hasCalculated = false;
     updateDisplay();
     window.showAppToast?.("تم تفريغ حقول التحليل.", "success");
   }
@@ -225,6 +234,10 @@
   }
 
   async function shareAnalysisImage() {
+    if (!hasCalculated) {
+      window.showAppToast?.("اضغط احسب التحليل أولًا قبل المشاركة.", "warning");
+      return;
+    }
     const res = computeAnalysis();
     const sharedAt = new Date();
     const sharedDate = `${String(sharedAt.getDate()).padStart(2, "0")}-${String(sharedAt.getMonth() + 1).padStart(2, "0")}-${sharedAt.getFullYear()}`;
@@ -232,7 +245,7 @@
     const sharedTime = `${hour % 12 || 12}:${String(sharedAt.getMinutes()).padStart(2, "0")} ${hour >= 12 ? "م" : "ص"}`;
     const canvas = document.createElement("canvas");
     canvas.width = 1080;
-    canvas.height = 1350;
+    canvas.height = 1180;
     const ctx = canvas.getContext("2d");
 
     ctx.direction = "rtl";
@@ -243,8 +256,8 @@
     ctx.fillStyle = "#e5e7eb";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // إطار رئيسي أبيض بحافة نبيتي
-    ctx.fillStyle = "#ffffff";
+    // إطار رئيسي رصاصي بحافة نبيتي، مطابق لخلفية صفحة التحليل
+    ctx.fillStyle = "#d1d5db";
     drawRoundedRect(ctx, 16, 16, canvas.width - 32, canvas.height - 32, 24);
     ctx.fill();
     ctx.lineWidth = 3.5;
@@ -253,25 +266,55 @@
 
     // العنوان الرئيسي
     const hasClient = (($("labClientName")?.value || "").trim().length > 0);
-    ctx.fillStyle = "#1f2937";
-    ctx.font = "800 32px 'Segoe UI', Tahoma, sans-serif";
-    ctx.fillText(hasClient ? `تحليل عينة - ${res.clientName}` : "تحليل عينة", canvas.width / 2, 90);
+    ctx.fillStyle = "#881337";
+    ctx.font = "800 34px 'Segoe UI', Tahoma, sans-serif";
+    ctx.fillText("تحليل العميل", canvas.width / 2, 58, canvas.width - 80);
+    if (hasClient) {
+      ctx.fillStyle = "#881337";
+      ctx.font = "800 42px 'Segoe UI', Tahoma, sans-serif";
+      ctx.fillText(`(${res.clientName})`, canvas.width / 2, 108, canvas.width - 80);
+    }
 
     // خط فاصل رصاصي
     ctx.strokeStyle = "#d1d5db";
     ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.moveTo(140, 150);
-    ctx.lineTo(canvas.width - 140, 150);
+    ctx.moveTo(140, 178);
+    ctx.lineTo(canvas.width - 140, 178);
     ctx.stroke();
+
+    const repName = String(window.getActiveUserName?.() || "").trim();
+    ctx.direction = "rtl";
+    ctx.fillStyle = "#4b5563";
+    ctx.font = "700 22px 'Segoe UI', Tahoma, sans-serif";
+    const shareDetails = `${repName ? `اسم المندوب: ${repName}  |  ` : ""}الوقت: ${sharedTime}  |  التاريخ: ${sharedDate}`;
+    ctx.fillText(shareDetails, canvas.width / 2, 145, canvas.width - 96);
+
+    // الأحماض مربع صغير في المنتصف فوق أوزان البيكر
+    const acidW = 320;
+    const acidH = 92;
+    const acidX = (canvas.width - acidW) / 2;
+    const acidY = 192;
+    ctx.fillStyle = "#ffffff";
+    ctx.strokeStyle = "#881337";
+    ctx.lineWidth = 2;
+    drawRoundedRect(ctx, acidX, acidY, acidW, acidH, 14);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#4b5563";
+    ctx.font = "700 18px 'Segoe UI', Tahoma, sans-serif";
+    ctx.fillText("الأحماض", canvas.width / 2, acidY + 26);
+    ctx.fillStyle = "#1f2937";
+    ctx.font = "800 30px 'Segoe UI', Tahoma, sans-serif";
+    ctx.fillText(fmtWeightDisplay(res.acidPct), canvas.width / 2, acidY + 66);
 
     // مجموعة الأوزان (4 مربعات بنفس الترتيب)
     const wGroupX = 44;
-    const wGroupY = 190;
+    const wGroupY = 300;
     const wGroupW = canvas.width - 88;
     const wGroupH = 380;
 
-    ctx.fillStyle = "#f3f4f6";
+    ctx.fillStyle = "#d1d5db";
     ctx.strokeStyle = "#cbd5e1";
     ctx.lineWidth = 1.8;
     drawRoundedRect(ctx, wGroupX, wGroupY, wGroupW, wGroupH, 18);
@@ -294,9 +337,9 @@
       const row = Math.floor(idx / 2);
       const cardX = wGroupX + wGroupW - wPad - (column + 1) * wCardW - column * wGap;
       const cardY = wGroupY + wPad + row * (wCardH + wGap);
-      ctx.fillStyle = "#ffffff";
-      ctx.strokeStyle = "#9ca3af";
-      ctx.lineWidth = 1.5;
+      ctx.fillStyle = "#fff8fa";
+      ctx.strokeStyle = "#881337";
+      ctx.lineWidth = 2.4;
       drawRoundedRect(ctx, cardX, cardY, wCardW, wCardH, 16);
       ctx.fill();
       ctx.stroke();
@@ -312,11 +355,11 @@
 
     // مجموعة النسب (3 مربعات بنفس الترتيب)
     const rGroupX = 44;
-    const rGroupY = 600;
+    const rGroupY = 700;
     const rGroupW = canvas.width - 88;
     const rGroupH = 220;
 
-    ctx.fillStyle = "#f3f4f6";
+    ctx.fillStyle = "#d1d5db";
     ctx.strokeStyle = "#cbd5e1";
     ctx.lineWidth = 1.8;
     drawRoundedRect(ctx, rGroupX, rGroupY, rGroupW, rGroupH, 18);
@@ -336,9 +379,9 @@
 
     ratios.forEach((item, idx) => {
       const cardX = rGroupX + rGroupW - rPad - (idx + 1) * rCardW - idx * rGap;
-      ctx.fillStyle = "#ffffff";
-      ctx.strokeStyle = "#9ca3af";
-      ctx.lineWidth = 1.6;
+      ctx.fillStyle = "#fff8fa";
+      ctx.strokeStyle = "#881337";
+      ctx.lineWidth = 2.4;
       drawRoundedRect(ctx, cardX, rCardY, rCardW, rCardH, 14);
       ctx.fill();
       ctx.stroke();
@@ -353,10 +396,10 @@
     });
 
     // مربع الخصم بالطن في المنتصف بلون نبيتي
-    const dedW = 520;
-    const dedH = 150;
+    const dedW = 442;
+    const dedH = 128;
     const dedX = (canvas.width - dedW) / 2;
-    const dedY = 865;
+    const dedY = 915;
 
     ctx.fillStyle = "#881337";
     ctx.strokeStyle = "#4c0519";
@@ -367,24 +410,17 @@
 
     ctx.fillStyle = "#ffe4e6";
     ctx.font = "700 22px 'Segoe UI', Tahoma, sans-serif";
-    ctx.fillText("الخصم بالطن (كجم/طن)", canvas.width / 2, dedY + 46);
+    ctx.fillText("الخصم بالطن (كجم/طن)", canvas.width / 2, dedY + 38);
 
     ctx.fillStyle = "#ffffff";
     ctx.font = "800 38px 'Segoe UI', Tahoma, sans-serif";
-    ctx.fillText(String(res.deductionPerTon), canvas.width / 2, dedY + 104);
-
-    const repName = String(window.getActiveUserName?.() || "").trim();
-    ctx.direction = "rtl";
-    ctx.fillStyle = "#4b5563";
-    ctx.font = "600 18px 'Segoe UI', Tahoma, sans-serif";
-    const shareDetails = `${repName ? `المندوب: ${repName}  |  ` : ""}التاريخ: ${sharedDate}  |  الوقت: ${sharedTime}`;
-    ctx.fillText(shareDetails, canvas.width / 2, 130, canvas.width - 96);
+    ctx.fillText(String(res.deductionPerTon), canvas.width / 2, dedY + 92);
 
     // التوقيع السفلي بنفس مكان التصميم
     ctx.direction = "ltr";
     ctx.fillStyle = "#6b7280";
-    ctx.font = "600 14px 'Segoe UI', Tahoma, sans-serif";
-    ctx.fillText("Designed & Structured by. ALI RAGAB - TAGADDOD", canvas.width / 2, canvas.height - 34);
+    ctx.font = "700 18px 'Segoe UI', Tahoma, sans-serif";
+    ctx.fillText("Programmed by .Ali Ragab - TAGADDOD", canvas.width / 2, canvas.height - 58);
 
     const dataUrl = canvas.toDataURL("image/png");
     try {
@@ -408,12 +444,13 @@
   }
 
   document.addEventListener("DOMContentLoaded", () => {
-    ["labClientName", "labAcids", "labEmptyWeight", "labBeforeBoil", "labAfterBoil", "labSedimentWeight"].forEach((id) => {
-      $(id)?.addEventListener("input", updateDisplay);
-      $(id)?.addEventListener("change", updateDisplay);
-    });
-    $("saveLabAnalysisBtn")?.addEventListener("click", (event) => {
-      withAnalysisButtonProgress(event.currentTarget, "جاري حفظ التحليل...", saveCurrentAnalysis);
+    $("calculateLabBtn")?.addEventListener("click", (event) => {
+      hasCalculated = true;
+      updateDisplay();
+      withAnalysisButtonProgress(event.currentTarget, "تم حساب التحليل", () => {
+        window.showAppToast?.("تم حساب نتائج التحليل.", "success");
+        return true;
+      });
     });
     $("shareLabImageBtn")?.addEventListener("click", (event) => {
       withAnalysisButtonProgress(event.currentTarget, "جاري تجهيز صورة التحليل...", shareAnalysisImage);

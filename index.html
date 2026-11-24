@@ -8,7 +8,7 @@
   <title>مشغلي الحركة | TAGADDOD</title>
   <link rel="icon" href="icon.png" type="image/png">
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="styles.css?v=mobile-wine-v5">
+  <link rel="stylesheet" href="styles.css?v=mobile-wine-v7">
 </head>
 <body>
   <div id="appSplash" class="app-splash" role="dialog" aria-label="شاشة بدء التطبيق">
@@ -100,8 +100,9 @@
       </section>
       <nav class="tabs" aria-label="أقسام التطبيق">
         <button class="tab-btn active" data-tab="analysisTab" type="button">تحليل العينات</button>
-        <button class="tab-btn" data-tab="newTripTab" type="button">تسجيل رحلة</button>
-        <button class="tab-btn" data-tab="extraDayTab" type="button">يوم عمل إضافي</button>
+        <button class="tab-btn" data-tab="newTripTab" type="button">تسجيل بدل السفر</button>
+        <button class="tab-btn" data-tab="extraDayTab" type="button">تسجيل يوم عمل إضافي</button>
+        <button class="tab-btn" data-tab="recordsTab" type="button">السجلات</button>
         <button class="tab-btn admin-only hidden" data-tab="adminTab" type="button">إدارة النظام</button>
       </nav>
 
@@ -141,6 +142,10 @@
             </div>
           </div>
 
+          <div class="lab-calculate-wrap">
+            <button id="calculateLabBtn" type="button" class="lab-button lab-button-calculate">احسب التحليل</button>
+          </div>
+
           <!-- الصف الثاني: 3 مربعات جنب بعض للنسب -->
           <div class="lab-group-box">
             <div class="analysis-results">
@@ -167,12 +172,11 @@
             </div>
           </div>
 
-          <div class="lab-card-footer">Designed &amp; Structured by ALI RAGAB - TAGADDOD</div>
+          <div class="lab-card-footer">Programmed by .Ali Ragab - TAGADDOD</div>
 
           <div class="actions-row lab-actions-center">
-            <button id="saveLabAnalysisBtn" type="button" class="primary">حفظ التحليل</button>
-            <button id="shareLabImageBtn" type="button" class="secondary">مشاركة صورة التحليل</button>
-            <button id="clearLabFormBtn" type="button" class="secondary">تفريغ الحقول</button>
+            <button id="shareLabImageBtn" type="button" class="lab-button lab-button-share">مشاركة صورة التحليل</button>
+            <button id="clearLabFormBtn" type="button" class="lab-button lab-button-clear">تفريغ الحقول</button>
           </div>
           <p class="muted lab-note-center">السماح للأحماض 3%، والسماح للمياه والرواسب معًا 2%. كل زيادة 1% تُحسب 10 كجم لكل طن.</p>
         </div>
@@ -185,21 +189,39 @@
 
       <section id="newTripTab" class="tab-panel">
         <div class="panel">
-          <h2>تسجيل رحلة جديدة</h2>
+          <h2>تسجيل بدل السفر</h2>
           <form id="tripForm" class="form-grid">
             <label>تاريخ الرحلة<input id="tripDate" type="date" required></label>
             <label>المندوب<select id="tripRepSelect" required></select></label>
             <label>المكان / المحافظة<input id="tripPlace" type="text" required placeholder="المكان أو المحافظة"></label>
             <label>اسم العميل<input id="tripClient" type="text" required></label>
             <label>بدل السفر (جنيه - ثابت)<input id="tripAllowance" type="number" min="0" step="0.01" readonly required title="يتم تحديد قيمة البدل من حساب المشرف فقط"></label>
-            <button type="submit" class="primary">حفظ الرحلة</button>
+            <button type="submit" class="primary">حفظ بدل السفر</button>
           </form>
           <p class="muted">لو الإنترنت فاصل، تتحفظ الرحلة مؤقتًا على الجهاز وتُرسل تلقائيًا عند عودة الاتصال.</p>
         </div>
 
+      </section>
+
+      <section id="extraDayTab" class="tab-panel">
+        <div class="panel">
+          <h2>تسجيل يوم عمل إضافي</h2>
+          <form id="extraDayForm" class="form-grid">
+            <label>تاريخ اليوم الإضافي<input id="extraDayDate" type="date" required></label>
+            <label>المندوب<select id="extraDayRepSelect" required></select></label>
+            <label>سبب التكليف / ملاحظات<input id="extraDayReason" type="text" required placeholder="مثال: اسم العميل او المكان الي انت رايحه"></label>
+            <label>صورة إثبات التكليف أو الفاتورة<input id="extraDayProofInput" type="file" accept="image/*"></label>
+            <button type="submit" class="primary">حفظ اليوم الإضافي</button>
+          </form>
+          <p class="muted">إرفاق صورة إثبات. لو الإنترنت فاصل، يتحفظ الطلب مؤقتًا على الجهاز ويرتفع عند عودة الاتصال.</p>
+        </div>
+
+      </section>
+
+      <section id="recordsTab" class="tab-panel">
         <div class="panel">
           <div class="panel-head">
-            <h2>سجل الرحلات وبدل السفر</h2>
+            <h2>سجل بدل السفر</h2>
             <button id="syncNowBtn" class="secondary" type="button">تحديث من Google Sheets</button>
           </div>
           <div class="filters admin-only hidden">
@@ -217,18 +239,7 @@
           </div>
           <div class="table-wrap rep-landscape-wrap">
             <table>
-              <thead>
-                <tr>
-                  <th>الطابع الزمني</th>
-                  <th>التاريخ</th>
-                  <th>المندوب</th>
-                  <th>المكان</th>
-                  <th>العميل</th>
-                  <th>بدل السفر</th>
-                  <th>الحالة</th>
-                  <th>إجراء</th>
-                </tr>
-              </thead>
+              <thead><tr><th>الطابع الزمني</th><th>التاريخ</th><th>المندوب</th><th>المكان</th><th>العميل</th><th id="tripAllowanceHeader">بدل السفر</th><th id="tripStatusHeader">الحالة</th><th>إجراء</th></tr></thead>
               <tbody id="recordsBody"></tbody>
             </table>
           </div>
@@ -237,26 +248,11 @@
             <span id="tripsPageInfo">صفحة 1 من 1</span>
             <button id="nextTripsPageBtn" class="secondary" type="button">التالي</button>
           </div>
-          <p class="muted pagination-hint">المندوب يرى رحلاته كاملة والمشرف يرى جميع الرحلات، مع عرض 10 رحلات في كل صفحة لخفة التصفح.</p>
-        </div>
-      </section>
-
-      <section id="extraDayTab" class="tab-panel">
-        <div class="panel">
-          <h2>تسجيل يوم عمل إضافي</h2>
-          <form id="extraDayForm" class="form-grid">
-            <label>تاريخ اليوم الإضافي<input id="extraDayDate" type="date" required></label>
-            <label>المندوب<select id="extraDayRepSelect" required></select></label>
-            <label>سبب التكليف / ملاحظات<input id="extraDayReason" type="text" required placeholder="مثال: اسم العميل او المكان الي انت رايحه"></label>
-            <label>صورة إثبات التكليف أو الفاتورة<input id="extraDayProofInput" type="file" accept="image/*"></label>
-            <button type="submit" class="primary">حفظ اليوم الإضافي</button>
-          </form>
-          <p class="muted">إرفاق صورة إثبات. لو الإنترنت فاصل، يتحفظ الطلب مؤقتًا على الجهاز ويرتفع عند عودة الاتصال.</p>
         </div>
 
         <div class="panel">
           <div class="panel-head">
-            <h2>سجل أيام العمل الإضافية</h2>
+            <h2>سجل بدل يوم عمل إضافي</h2>
             <button id="syncExtraNowBtn" class="secondary" type="button">تحديث من Google Sheets</button>
           </div>
           <div class="filters admin-only hidden">
@@ -274,17 +270,7 @@
           </div>
           <div class="table-wrap rep-landscape-wrap">
             <table>
-              <thead>
-                <tr>
-                  <th>الطابع الزمني</th>
-                  <th>التاريخ</th>
-                  <th>المندوب</th>
-                  <th>السبب / الملاحظات</th>
-                  <th>صورة الإثبات</th>
-                  <th>الحالة</th>
-                  <th>إجراء</th>
-                </tr>
-              </thead>
+              <thead><tr><th>الطابع الزمني</th><th>التاريخ</th><th>المندوب</th><th>السبب / الملاحظات</th><th>صورة الإثبات</th><th>الحالة</th><th>إجراء</th></tr></thead>
               <tbody id="extraRecordsBody"></tbody>
             </table>
           </div>
@@ -293,7 +279,6 @@
             <span id="extraPageInfo">صفحة 1 من 1</span>
             <button id="nextExtraPageBtn" class="secondary" type="button">التالي</button>
           </div>
-          <p class="muted pagination-hint">سجل مستقل لأيام العمل الإضافية وصور الإثباتات المرفقة، مع عرض 10 سجلات في كل صفحة.</p>
         </div>
       </section>
 
@@ -325,8 +310,8 @@
   </main>
 
   <footer>Designed &amp; Structured by ALI RAGAB - TAGADDOD</footer>
-  <script defer src="analysis.js?v=mobile-share-v4"></script>
-  <script defer src="app.js?v=mobile-wine-v6"></script>
+  <script defer src="analysis.js?v=mobile-share-v10"></script>
+  <script defer src="app.js?v=mobile-wine-v7"></script>
   <script>
     (function () {
       const splash = document.getElementById("appSplash");

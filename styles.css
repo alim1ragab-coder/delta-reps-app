@@ -908,6 +908,56 @@ tbody tr:nth-child(even) {
   justify-content: center;
 }
 
+.lab-calculate-wrap {
+  display: flex;
+  justify-content: center;
+  margin: -4px 0 14px;
+}
+
+.lab-calculate-wrap .lab-button-calculate {
+  min-width: 180px;
+  max-width: 260px;
+}
+
+.lab-button {
+  min-height: 44px;
+  border: 2px solid transparent;
+  border-radius: 11px;
+  font-weight: 800;
+  box-shadow: 0 4px 10px rgba(31, 41, 55, 0.10);
+}
+
+.lab-button-calculate {
+  background: #881337;
+  color: #ffffff;
+  border-color: #6b102e;
+}
+
+.lab-button-share {
+  background: #be123c;
+  color: #ffffff;
+  border-color: #881337;
+}
+
+.lab-button-clear {
+  background: #e5e7eb;
+  color: #4b5563;
+  border-color: #9ca3af;
+}
+
+.lab-button-calculate:hover {
+  background: #6b102e;
+}
+
+.lab-button-share:hover {
+  background: #9f1239;
+}
+
+.lab-button-clear:hover {
+  background: #d1d5db;
+  color: #1f2937;
+}
+
 .lab-note-center {
   text-align: center;
   margin-top: 10px;
@@ -1574,17 +1624,19 @@ footer {
   }
 
   .table-wrap.rep-landscape-wrap tbody tr {
-    grid-template-columns: minmax(0, 1fr);
-    padding: 7px 12px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 8px;
+    padding: 8px;
   }
 
   .table-wrap.rep-landscape-wrap td {
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
     gap: 10px;
-    padding: 9px 0;
-    font-size: 13px;
+    padding: 9px 6px;
+    min-width: 0;
+    font-size: 12.5px;
   }
 
   .table-wrap.rep-landscape-wrap td button {
