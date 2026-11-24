@@ -412,16 +412,33 @@ function reviewPendingRecords_(type,ids,status,actor) {
 }
 
 function migrateJourneysSheet_(ss,trips) {
-  if (trips.getLastRow() > 1) return;
-  const old = ss.getSheetByName('Journeys');
-  if (!old || old.getLastRow() < 2) return;
-  const accounts = getAccounts_();
-  const oldRows = old.getDataRange().getValues().slice(1);
-  const converted = oldRows.filter(r => r[0]).map(r => {
-    const owner = accounts.find(a => String(a.id) === String(r[1])) || accounts.find(a => a.name === String(r[2]||''));
-    return [String(r[0]),owner ? owner.phone:'',String(r[2]||''),String(r[9]||''),formatDate_(r[3]),String(r[5]||''),String(r[4]||''),Number(r[7])||0,String(r[9]||''),'approved','',''];
-  });
-  if (converted.length) trips.getRange(2,1,converted.length,TRIP_HEADERS.length).setValues(converted);
+  const migrationKey = 'journeys_migrated_v1_' + ss.getId();
+  const properties = PropertiesService.getScriptProperties();
+  if (properties.getProperty(migrationKey) === '1') return;
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    if (properties.getProperty(migrationKey) === '1') return;
+    if (trips.getLastRow() > 1) {
+      properties.setProperty(migrationKey,'1');
+      return;
+    }
+    const old = ss.getSheetByName('Journeys');
+    if (!old || old.getLastRow() < 2) {
+      properties.setProperty(migrationKey,'1');
+      return;
+    }
+    const accounts = getAccounts_();
+    const oldRows = old.getDataRange().getValues().slice(1);
+    const converted = oldRows.filter(r => r[0]).map(r => {
+      const owner = accounts.find(a => String(a.id) === String(r[1])) || accounts.find(a => a.name === String(r[2]||''));
+      return [String(r[0]),owner ? owner.phone:'',String(r[2]||''),String(r[9]||''),formatDate_(r[3]),String(r[5]||''),String(r[4]||''),Number(r[7])||0,String(r[9]||''),'approved','',''];
+    });
+    if (converted.length) trips.getRange(2,1,converted.length,TRIP_HEADERS.length).setValues(converted);
+    properties.setProperty(migrationKey,'1');
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function getSpreadsheet_() {

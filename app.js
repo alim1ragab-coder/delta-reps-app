@@ -5,7 +5,7 @@
   const CONFIG = {
     appVersion: "1.0.0",
     updateCheckUrl: "https://raw.githubusercontent.com/aliragab-coder/delta-reps/main/version.json",
-    sheetUrl: "https://script.google.com/macros/s/AKfycbyooC2YPiSkImm1obs3xDaUmhuVVaZ_NV5WOi-v3CVKW7dmjRrJ81ChHekIIlhaKbEF9w/exec",
+    sheetUrl: "https://script.google.com/macros/s/AKfycbzwwQZ_YXc_tnoLaMC5-AR1oMEJ8PujCxXWBv5BKo5dnYorc1tVcMmw8AVwH7W90jbwaA/exec",
     xlsxUrl: "https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js",
     sessionKey: "delta_session_token_v5",
     cacheKey: "delta_state_cache_v5",
@@ -17,19 +17,27 @@
   let state = { user: null, accounts: [], trips: [], extraDays: [], analyses: [], tripCount: 0, approvedTripCount: 0, pendingTripCount: 0, pendingTripIds: [], approvedAllowance: 0, extraCount: 0, pendingExtraCount: 0, pendingExtraIds: [], queueVersion: 0, allowance: 50 };
   let currentPage = 1;
   let extraCurrentPage = 1;
-  let mutationBusy = false;
   let loginBusy = false;
   let firstLoginMode = false;
   let lastLoginPhone = "";
   let lastStateError = "";
   let toastTimer = null;
+  let actionProgressSequence = 0;
+  const activeActionProgress = [];
   let appLoadingDepth = 0;
   let mutationQueue = [];
   let queueSyncBusy = false;
   let activeQueueRequestId = "";
   let xlsxLoadPromise = null;
+  let serverMutationChain = Promise.resolve();
 
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  function queueServerMutation(action) {
+    const result = serverMutationChain.then(action, action);
+    serverMutationChain = result.then(() => undefined, () => undefined);
+    return result;
+  }
 
   const normalizePhone = (value) => {
     let digits = String(value || "").replace(/\D/g, "");
@@ -74,7 +82,7 @@
     return badge;
   }
 
-  function showToast(message, kind = "info", duration = 4200) {
+  function showToast(message, kind = "info", duration = 2600) {
     let el = $("appToast");
     if (!el) {
       el = document.createElement("div");
@@ -91,19 +99,40 @@
   }
   window.showAppToast = showToast;
 
+  function beginActionProgress(message) {
+    const operation = { id: ++actionProgressSequence, message };
+    activeActionProgress.push(operation);
+    renderActionProgress();
+    return () => {
+      const index = activeActionProgress.findIndex((item) => item.id === operation.id);
+      if (index >= 0) activeActionProgress.splice(index, 1);
+      renderActionProgress();
+    };
+  }
+  window.beginAppActionProgress = beginActionProgress;
+
+  function renderActionProgress() {
+    const indicator = $("actionProgress");
+    if (!indicator) return;
+    const current = activeActionProgress[activeActionProgress.length - 1];
+    indicator.textContent = current?.message || "";
+    indicator.classList.toggle("hidden", !current);
+  }
+
   async function withButtonProgress(button, loadingMessage, action) {
     if (!button || button.dataset.actionPending === "true") return false;
     const originalText = button.textContent;
+    const finishProgress = beginActionProgress(loadingMessage);
     button.dataset.actionPending = "true";
     button.setAttribute("aria-busy", "true");
     button.textContent = loadingMessage;
-    showToast(loadingMessage, "loading");
     try {
       return await action(button);
     } catch (error) {
       showToast(error.message || "تعذر تنفيذ العملية.", "error", 6000);
       return false;
     } finally {
+      finishProgress();
       delete button.dataset.actionPending;
       button.removeAttribute("aria-busy");
       if (button.isConnected) button.textContent = originalText;
@@ -134,7 +163,12 @@
     const badge = $("connectionStatusBadge");
     if (!badge) return;
     const online = navigator.onLine;
-    badge.textContent = online ? "متصل بالإنترنت" : "غير متصل";
+    const status = online ? "متصل بالإنترنت" : "غير متصل";
+    const label = badge.querySelector(".connection-status-label");
+    if (label) label.textContent = status;
+    else badge.textContent = status;
+    badge.setAttribute("aria-label", status);
+    badge.title = status;
     badge.classList.toggle("status-online", online);
     badge.classList.toggle("status-offline", !online);
   }
@@ -406,7 +440,7 @@
         activeQueueRequestId = item.requestId;
         renderAll();
         try {
-          const result = await apiPost(item.action, item.payload, item.requestId);
+          const result = await queueServerMutation(() => apiPost(item.action, item.payload, item.requestId));
           activeQueueRequestId = "";
           const remaining = mutationQueue.filter((queuedItem) => queuedItem.requestId !== item.requestId);
           if (!persistMutationQueue(remaining)) break;
@@ -511,7 +545,6 @@
       return false;
     }
     try {
-      if (showMessage) setStatus("جاري تحديث البيانات من Google Sheets...", "loading");
       const response = await apiPost("get_state", { tripPage: currentPage, extraPage: extraCurrentPage });
       if (!response?.ok) throw new Error(response?.error || "تعذر تحميل البيانات.");
       applyServerState(response.data);
@@ -559,28 +592,22 @@
     );
   }
 
-  async function runMutation(action, payload, successMessage, loadingMessage = "جاري تنفيذ العملية...") {
-    if (mutationBusy) {
-      showToast("هناك عملية أخرى قيد التنفيذ. انتظر تأكيدها ثم حاول مرة أخرى.", "warning", 5000);
-      return false;
-    }
-    if (!navigator.onLine) {
-      showToast("النت فاصل. افتح النت الأول وبعد كده سجل.", "error", 6000);
-      return false;
-    }
-    mutationBusy = true;
-    showToast(loadingMessage, "loading");
-    try {
-      await apiPost(action, payload);
-      await pullState(false);
-      if (successMessage) setStatus(successMessage, "success");
-      return true;
-    } catch (error) {
-      setStatus(error.message, "error");
-      return false;
-    } finally {
-      mutationBusy = false;
-    }
+  function runMutation(action, payload, successMessage) {
+    return queueServerMutation(async () => {
+      if (!navigator.onLine) {
+        showToast("النت فاصل. افتح النت الأول وبعد كده سجل.", "error", 6000);
+        return false;
+      }
+      try {
+        await apiPost(action, payload);
+        await pullState(false);
+        if (successMessage) setStatus(successMessage, "success");
+        return true;
+      } catch (error) {
+        setStatus(error.message, "error");
+        return false;
+      }
+    });
   }
 
   window.syncAnalysisToServer = async function (analysis) {
@@ -588,30 +615,32 @@
       showToast("سجل الدخول أولًا حتى يتسجل التحليل على Google Sheets.", "warning", 6000);
       return null;
     }
-    showToast("جاري تسجيل التحليل على Google Sheets...", "loading");
-    try {
-      const result = await apiPost("add_analysis", { analysis });
-      pullState(false);
-      showToast("تم حفظ التحليل على Google Sheets.", "success");
-      return { id: result.analysisId };
-    } catch (error) {
-      showToast(error.message || "تعذر مزامنة التحليل.", "error", 6000);
-      return null;
-    }
+    return queueServerMutation(async () => {
+      try {
+        const result = await apiPost("add_analysis", { analysis });
+        await pullState(false);
+        showToast("تم حفظ التحليل على Google Sheets.", "success");
+        return { id: result.analysisId };
+      } catch (error) {
+        showToast(error.message || "تعذر مزامنة التحليل.", "error", 6000);
+        return null;
+      }
+    });
   };
 
   window.deleteServerAnalysis = async function (id) {
     if (!id) return true;
     if (!sessionToken()) return true;
-    showToast("جاري حذف التحليل من Google Sheets...", "loading");
-    try {
-      await apiPost("delete_analysis", { id });
-      pullState(false);
-      return true;
-    } catch (error) {
-      showToast(error.message || "تعذر حذف التحليل من Google Sheets.", "error", 6000);
-      return false;
-    }
+    return queueServerMutation(async () => {
+      try {
+        await apiPost("delete_analysis", { id });
+        await pullState(false);
+        return true;
+      } catch (error) {
+        showToast(error.message || "تعذر حذف التحليل من Google Sheets.", "error", 6000);
+        return false;
+      }
+    });
   };
 
   async function checkForAppUpdate(manual = false) {
@@ -623,7 +652,6 @@
       if (manual) showToast("اتصل بالإنترنت أولاً للبحث عن تحديثات.", "warning");
       return;
     }
-    if (manual) showToast("جاري البحث عن إصدار جديد...", "loading");
     try {
       const sep = CONFIG.updateCheckUrl.includes("?") ? "&" : "?";
       const res = await fetch(`${CONFIG.updateCheckUrl}${sep}t=${Date.now()}`, { cache: "no-store" });
@@ -687,7 +715,23 @@
   function renderHeader() {
     const badge = $("userBadge");
     if (badge) {
-      badge.textContent = state.user ? `${state.user.name} · ${state.user.phone} · ${isAdmin() ? "مشرف" : "مندوب"}` : "زائر";
+      const name = badge.querySelector(".user-badge-name");
+      const details = badge.querySelector(".user-badge-details");
+      const userDetails = state.user ? `${state.user.phone} · ${isAdmin() ? "مشرف" : "مندوب"}` : "";
+      if (name && details) {
+        name.textContent = state.user?.name || "";
+        details.textContent = userDetails;
+      } else {
+        badge.textContent = state.user ? `${state.user.name} · ${userDetails}` : "زائر";
+      }
+      if (state.user) {
+        const label = `${state.user.name} · ${userDetails}`;
+        badge.setAttribute("aria-label", label);
+        badge.title = label;
+      } else {
+        badge.removeAttribute("aria-label");
+        badge.removeAttribute("title");
+      }
       badge.classList.toggle("hidden", !state.user);
     }
     const avatar = $("headerAvatar");
@@ -744,7 +788,7 @@
           if (reset.dataset.actionPending === "true") return;
           if (!confirm(`سيتم إلغاء كلمة سر ${account.name}. عند الدخول التالي سيتعين عليه تعيين كلمة سر جديدة. هل تريد المتابعة؟`)) return;
           await withButtonProgress(reset, "جاري إعادة ضبط كلمة السر...", () =>
-            runMutation("reset_password", { phone: account.phone }, "تمت إعادة ضبط كلمة السر.", "جاري إعادة ضبط كلمة السر..."));
+            runMutation("reset_password", { phone: account.phone }, "تمت إعادة ضبط كلمة السر."));
         });
         li.appendChild(reset);
       }
@@ -760,7 +804,7 @@
         if (remove.dataset.actionPending === "true") return;
         if (!confirm(`تأكيد حذف حساب ${account.name}؟`)) return;
         await withButtonProgress(remove, "جاري حذف الحساب...", () =>
-          runMutation("delete_account", { phone: account.phone }, "تم حذف الحساب بنجاح.", "جاري حذف الحساب..."));
+          runMutation("delete_account", { phone: account.phone }, "تم حذف الحساب بنجاح."));
       });
       li.appendChild(remove);
       list.appendChild(li);
@@ -902,7 +946,7 @@
             if (button.dataset.actionPending === "true") return;
             if (confirm("هل تريد حذف هذه الرحلة نهائيًا؟")) {
               await withButtonProgress(button, "جاري حذف الرحلة...", () =>
-                runMutation("delete_trip", { id: trip.id }, "تم حذف الرحلة بنجاح.", "جاري حذف الرحلة..."));
+                runMutation("delete_trip", { id: trip.id }, "تم حذف الرحلة بنجاح."));
             }
           });
           cell.appendChild(button);
@@ -976,10 +1020,10 @@
     }
     loginBusy = true;
     const loginButton = $("phoneAuthBtn");
+    const finishProgress = beginActionProgress("جاري تسجيل الدخول...");
     loginButton.disabled = true;
     loginButton.setAttribute("aria-busy", "true");
     loginButton.textContent = "جاري تسجيل الدخول...";
-    showToast("جاري الدخول للحساب... برجاء الانتظار", "loading");
     try {
       const result = await apiPost("login", { phone, password: firstLoginMode ? "" : password, newPassword: firstLoginMode ? newPassword : "" });
       localStorage.setItem(CONFIG.sessionKey, result.sessionToken);
@@ -1006,6 +1050,7 @@
         showToast(error.message, "error", 6000);
       }
     } finally {
+      finishProgress();
       loginBusy = false;
       loginButton.disabled = false;
       loginButton.removeAttribute("aria-busy");
@@ -1041,7 +1086,6 @@
   async function saveProfile() {
     if (!navigator.onLine) return showToast("النت فاصل. افتح النت الأول وبعد كده احفظ التعديلات.", "error", 6000);
     try {
-      showToast("جاري تجهيز البيانات...", "loading");
       const payload = {
         phone: normalizePhone($("updatePhoneInput").value),
         currentPassword: $("currentPassInput").value,
@@ -1050,7 +1094,7 @@
       };
       if (!payload.phone && !payload.newPassword && !payload.avatar) return showToast("أدخل تعديلًا واحدًا على الأقل.", "warning");
       if (payload.newPassword && payload.newPassword.length < 4) return showToast("كلمة السر الجديدة يجب أن تكون 4 خانات على الأقل.", "warning");
-      const ok = await runMutation("update_profile", payload, "تم تحديث بيانات الحساب بنجاح.", "جاري حفظ بيانات الحساب...");
+      const ok = await runMutation("update_profile", payload, "تم تحديث بيانات الحساب بنجاح.");
       if (ok) {
         ["updatePhoneInput", "currentPassInput", "updatedPassInput", "updateAvatarInput"].forEach((id) => { $(id).value = ""; });
         setView("app");
@@ -1143,7 +1187,7 @@
             if (button.dataset.actionPending === "true") return;
             if (confirm("هل تريد حذف سجل اليوم الإضافي؟")) {
               await withButtonProgress(button, "جاري الحذف...", () =>
-                runMutation("delete_extra_day", { id: item.id }, "تم حذف اليوم الإضافي بنجاح.", "جاري الحذف..."));
+                runMutation("delete_extra_day", { id: item.id }, "تم حذف اليوم الإضافي بنجاح."));
             }
           });
           cell.appendChild(button);
@@ -1170,7 +1214,6 @@
     const from = $("extraFromDate").value;
     const to = $("extraToDate").value;
     if (!from || !to) return showToast("حدد تاريخ البداية والنهاية.", "warning");
-    showToast("جاري تجهيز ملف Excel...", "loading");
     try {
       await loadXlsxLibrary();
       const result = await apiPost("list_extra_days", { from, to });
@@ -1200,7 +1243,6 @@
     if (!from || !to) return showToast("حدد تاريخ البداية والنهاية قبل التصدير.", "warning");
     if (from > to) return showToast("تاريخ البداية يجب ألا يكون بعد تاريخ النهاية.", "warning");
 
-    showToast("جاري تحميل مكتبة Excel وتجهيز التقرير...", "loading");
     try {
       await loadXlsxLibrary();
       const listResult = await apiPost("list_trips", { from, to });
@@ -1210,7 +1252,7 @@
       const repNames = [...new Set(rows.map((trip) => trip.repName).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ar"));
       const totalAllowance = approvedRows.reduce((sum, trip) => sum + Number(trip.allowance || 0), 0);
       const aoa = [
-        ["تقرير رحلات مناديب الدلتا - TAGADDOD", "", "", "", "", "", ""],
+        ["تقرير رحلات مشغلي الحركة - TAGADDOD", "", "", "", "", "", ""],
         ["الطابع الزمني", "تاريخ الرحلة", "اسم المندوب", "المكان / المحافظة", "اسم العميل", "بدل السفر (ج.م)", "الحالة"],
         ...rows.map((trip) => [formatTimestamp(trip.timestamp), trip.date || "", trip.repName || "", trip.place || "", trip.client || "", Number(trip.allowance || 0), reviewLabel(trip.status)])
       ];
@@ -1319,7 +1361,7 @@
   }
 
   function bindEvents() {
-    bindProgressClick($("checkUpdateBtn"), "جاري البحث عن تحديث...", () => checkForAppUpdate(true));
+    bindProgressClick($("checkUpdateBtn"), "جاري الفحص...", () => checkForAppUpdate(true));
     $("loginPhoneInput").addEventListener("input", syncAuthFields);
     $("loginPhoneInput").addEventListener("change", syncAuthFields);
     $("loginForm").addEventListener("submit", (event) => { event.preventDefault(); login(); });
@@ -1385,14 +1427,14 @@
         const phone = normalizePhone($("newRepPhone").value);
         const role = $("newRepRole").value;
         if (!name || phone.length < 10) return showToast("أدخل اسمًا ورقم تليفون صحيحًا.", "warning");
-        const ok = await runMutation("add_account", { name, phone, role }, "تم إضافة الحساب بنجاح.", "جاري إضافة الحساب...");
+        const ok = await runMutation("add_account", { name, phone, role }, "تم إضافة الحساب بنجاح.");
         if (ok) { $("newRepName").value = ""; $("newRepPhone").value = ""; }
       });
     });
     bindProgressClick($("saveAllowanceBtn"), "جاري حفظ بدل السفر...", async () => {
       const allowance = Number($("defaultAllowanceInput").value);
       if (!Number.isFinite(allowance) || allowance < 0) return showToast("أدخل قيمة بدل صحيحة.", "warning");
-      await runMutation("set_allowance", { allowance }, "تم حفظ بدل السفر الافتراضي بنجاح.", "جاري حفظ بدل السفر...");
+      await runMutation("set_allowance", { allowance }, "تم حفظ بدل السفر الافتراضي بنجاح.");
     });
     ["fromDate", "toDate"].forEach((id) => $(id).addEventListener("change", () => { currentPage = 1; renderTrips(); }));
     $("tripSearchInput").addEventListener("input", () => { currentPage = 1; renderTrips(); });

@@ -8,16 +8,17 @@
   async function withAnalysisButtonProgress(button, loadingMessage, action) {
     if (!button || button.dataset.actionPending === "true") return false;
     const originalText = button.textContent;
+    const finishProgress = window.beginAppActionProgress?.(loadingMessage) || (() => {});
     button.dataset.actionPending = "true";
     button.setAttribute("aria-busy", "true");
     button.textContent = loadingMessage;
-    window.showAppToast?.(loadingMessage, "loading");
     try {
       return await action();
     } catch (error) {
       window.showAppToast?.(error.message || "تعذر تنفيذ العملية.", "error", 6000);
       return false;
     } finally {
+      finishProgress();
       delete button.dataset.actionPending;
       button.removeAttribute("aria-busy");
       if (button.isConnected) button.textContent = originalText;
@@ -134,6 +135,7 @@
         const deletionKey = item.id || `local:${idx}`;
         if (deletingAnalysisIds.has(deletionKey)) return;
         deletingAnalysisIds.add(deletionKey);
+        const finishProgress = window.beginAppActionProgress?.("جاري حذف التحليل...") || (() => {});
         btn.disabled = true;
         btn.setAttribute("aria-busy", "true");
         btn.textContent = "جاري الحذف...";
@@ -151,6 +153,7 @@
           deleted = true;
           window.showAppToast?.("تم حذف التحليل المحفوظ.", "success");
         } finally {
+          finishProgress();
           deletingAnalysisIds.delete(deletionKey);
           if (!deleted && btn.isConnected) {
             btn.disabled = false;
@@ -276,10 +279,10 @@
     ctx.stroke();
 
     const weights = [
-      { label: "وزن فارغ", val: fmtWeightDisplay(res.emptyWeight) },
-      { label: "قبل الغليان", val: fmtWeightDisplay(res.beforeBoil) },
-      { label: "بعد الغليان", val: fmtWeightDisplay(res.afterBoil) },
-      { label: "وزن الرواسب", val: fmtWeightDisplay(res.sedimentWeight) }
+      { label: "وزن البيكر فارغ", val: fmtWeightDisplay(res.emptyWeight) },
+      { label: "وزن البيكر مليان", val: fmtWeightDisplay(res.beforeBoil) },
+      { label: "وزن البيكر بعد الغليان", val: fmtWeightDisplay(res.afterBoil) },
+      { label: "وزن الرواسب في البيكر", val: fmtWeightDisplay(res.sedimentWeight) }
     ];
     const wGap = 14;
     const wPad = 14;

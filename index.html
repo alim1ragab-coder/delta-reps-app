@@ -3,35 +3,52 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#b91c1c">
-  <meta name="description" content="إدارة رحلات مناديب الدلتا وبدل السفر وأيام العمل الإضافية وتحليل عينات الزيت">
-  <title>مناديب الدلتا | TAGADDOD</title>
+  <meta name="theme-color" content="#6b102e">
+  <meta name="description" content="إدارة حركة TAGADDOD والرحلات وبدل السفر وأيام العمل الإضافية وتحليل عينات الزيت">
+  <title>مشغلي الحركة | TAGADDOD</title>
   <link rel="icon" href="icon.png" type="image/png">
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="styles.css?v=app-startup-lab-palette-v3">
+  <link rel="stylesheet" href="styles.css?v=mobile-wine-v5">
 </head>
 <body>
   <div id="appSplash" class="app-splash" role="dialog" aria-label="شاشة بدء التطبيق">
     <div class="app-splash-card">
-      <img src="icon.png" alt="مناديب الدلتا TAGADDOD">
+      <img src="icon.png" alt="مشغلي الحركة TAGADDOD">
       <button id="skipSplashBtn" type="button">تخطي</button>
     </div>
   </div>
   <header class="topbar">
     <div class="brand">
       <div class="brand-mark" aria-hidden="true">T</div>
-      <div><h1>مناديب الدلتا</h1><small>TAGADDOD · BY.ALI RAGAB</small></div>
+      <div><h1>مشغلي الحركة</h1><small>TAGADDOD · BY.ALI RAGAB</small></div>
     </div>
     <div class="header-actions">
-      <span id="connectionStatusBadge" class="status-badge status-offline">جارٍ التحقق...</span>
+      <span id="connectionStatusBadge" class="status-badge status-offline" aria-label="جارٍ التحقق من الاتصال">
+        <svg class="wifi-symbol" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M2 8.82a15.91 15.91 0 0 1 20 0M5 12.55a11 11 0 0 1 14 0M8.94 16.11a6 6 0 0 1 6.12 0M12 20h.01"></path>
+        </svg>
+        <svg class="wifi-offline-mark" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M6 6 18 18M18 6 6 18"></path>
+        </svg>
+        <span class="connection-status-label">جارٍ التحقق...</span>
+      </span>
       <img id="headerAvatar" class="header-avatar hidden" alt="الصورة الشخصية">
-      <span id="userBadge" class="user-badge hidden"></span>
-      <button id="checkUpdateBtn" class="secondary" type="button">تحديثات</button>
+      <span id="userBadge" class="user-badge hidden">
+        <span class="user-badge-icon" aria-hidden="true"></span>
+        <span class="user-badge-name"></span>
+        <span class="user-badge-details"></span>
+      </span>
+      <button id="checkUpdateBtn" class="secondary" type="button" aria-label="فحص إصدار التطبيق" title="فحص إصدار التطبيق">
+        <span class="header-button-icon" aria-hidden="true">↻</span>
+        <span class="header-button-label">الإصدار</span>
+      </button>
       <button id="openLoginFromSamplesBtn" class="secondary" type="button">تسجيل الدخول</button>
       <button id="openChangePassBtn" class="secondary hidden" type="button">حسابي</button>
       <button id="logoutBtn" class="danger hidden" type="button">خروج</button>
     </div>
   </header>
+
+  <div id="actionProgress" class="action-progress hidden" role="status" aria-live="polite" aria-atomic="true"></div>
 
   <main>
     <section id="authSection" class="panel auth-panel hidden">
@@ -76,7 +93,7 @@
     <section id="appSection">
       <section id="guestLoginPrompt" class="panel guest-login-prompt hidden">
         <div>
-          <h2>أهلًا بك في مناديب الدلتا</h2>
+          <h2>أهلًا بك في مشغلي الحركة</h2>
           <p class="muted">سجّل دخولك للوصول إلى الرحلات وسجل الأيام الإضافية.</p>
         </div>
         <button id="guestLoginBtn" class="primary" type="button">تسجيل الدخول</button>
@@ -106,19 +123,19 @@
           <div class="lab-group-box">
             <div class="lab-weights-grid">
               <label class="lab-box-card">
-                <span>وزن فارغ</span>
+                <span>وزن البيكر فارغ</span>
                 <input id="labEmptyWeight" type="number" inputmode="decimal" min="0" step="any" placeholder="0">
               </label>
               <label class="lab-box-card">
-                <span>قبل الغليان</span>
+                <span>وزن البيكر مليان</span>
                 <input id="labBeforeBoil" type="number" inputmode="decimal" min="0" step="any" placeholder="0">
               </label>
               <label class="lab-box-card">
-                <span>بعد الغليان</span>
+                <span>وزن البيكر بعد الغليان</span>
                 <input id="labAfterBoil" type="number" inputmode="decimal" min="0" step="any" placeholder="0">
               </label>
               <label class="lab-box-card">
-                <span>وزن الرواسب</span>
+                <span>وزن الرواسب في البيكر</span>
                 <input id="labSedimentWeight" type="number" inputmode="decimal" min="0" step="any" placeholder="0">
               </label>
             </div>
@@ -308,8 +325,8 @@
   </main>
 
   <footer>Designed &amp; Structured by ALI RAGAB - TAGADDOD</footer>
-  <script defer src="analysis.js?v=async-action-feedback-v1"></script>
-  <script defer src="app.js?v=app-startup-lab-palette-v2"></script>
+  <script defer src="analysis.js?v=ops-gray-v3"></script>
+  <script defer src="app.js?v=mobile-wine-v5"></script>
   <script>
     (function () {
       const splash = document.getElementById("appSplash");
