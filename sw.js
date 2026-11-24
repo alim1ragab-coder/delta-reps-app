@@ -1,5 +1,5 @@
-const CACHE_NAME = "tagaddod-cache-rep-name-time-v20";
-const APP_SHELL = ["./", "./index.html", "./styles.css?v=offline-sync-v1", "./app.js?v=rep-name-v1", "./analysis.js?v=rep-name-time-v3", "./manifest.json", "./icon.png", "./icon.svg"];
+const CACHE_NAME = "tagaddod-cache-script-url-v22";
+const APP_SHELL = ["./", "./index.html", "./styles.css?v=offline-sync-v1", "./app.js?v=script-url-v4", "./analysis.js?v=rep-name-time-v3", "./manifest.json", "./icon.png", "./icon.svg"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

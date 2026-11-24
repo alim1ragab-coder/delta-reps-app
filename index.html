@@ -36,22 +36,22 @@
   <main>
     <section id="authSection" class="panel auth-panel hidden">
       <div class="panel-head"><h2 id="authTitle">تسجيل الدخول</h2><button id="backToSamplesBtn" class="secondary" type="button">رجوع للتحليل</button></div>
-      <p id="authHint" class="muted">أدخل رقم التليفون وكلمة السر المسجلة.</p>
+      <p id="authHint" class="muted">أدخل رقم التليفون والرقم السري المسجل.</p>
       <form id="loginForm" class="form-grid one-column">
         <label>رقم التليفون
           <input id="loginPhoneInput" type="tel" inputmode="numeric" autocomplete="username" placeholder="01xxxxxxxxx" required>
         </label>
         <div id="existingPasswordBox">
-          <label>كلمة السر
+          <label>الرقم السري
             <input id="loginPasswordInput" type="password" autocomplete="current-password" placeholder="كلمة السر">
           </label>
         </div>
         <div id="firstTimeSetupBox" class="hidden">
-          <label>كلمة سر جديدة
-            <input id="setupPasswordInput" type="password" minlength="4" autocomplete="new-password">
+          <label>رقم سري جديد
+            <input id="setupPasswordInput" type="password" minlength="4" inputmode="numeric" pattern="[0-9]*" title="أرقام فقط، 4 أرقام على الأقل" autocomplete="new-password">
           </label>
-          <label>تأكيد كلمة السر
-            <input id="confirmPasswordInput" type="password" minlength="4" autocomplete="new-password">
+          <label>تأكيد الرقم السري
+            <input id="confirmPasswordInput" type="password" minlength="4" inputmode="numeric" pattern="[0-9]*" title="أرقام فقط، 4 أرقام على الأقل" autocomplete="new-password">
           </label>
         </div>
         <div class="actions-row">
@@ -310,7 +310,7 @@
   <footer>Designed &amp; Structured by ALI RAGAB - TAGADDOD</footer>
   <script defer src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
   <script defer src="analysis.js?v=rep-name-time-v3"></script>
-  <script defer src="app.js?v=rep-name-v1"></script>
+  <script defer src="app.js?v=script-url-v4"></script>
   <script>
     (function () {
       const splash = document.getElementById("appSplash");

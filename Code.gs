@@ -252,8 +252,11 @@ function login_(payload) {
   let hash = account.passwordHash;
   if (!hash) {
     const newPassword = String(payload.newPassword || '');
-    if (!newPassword) return {ok:false,code:'FIRST_LOGIN',firstLogin:true,error:'هذا أول دخول للحساب. عيّن كلمة سر جديدة.'};
-    if (newPassword.length < 4) throw new Error('كلمة السر يجب أن تكون 4 خانات على الأقل.');
+    if (!newPassword) {
+      if (!String(payload.password || '')) throw new Error('اكتب أي رقم سري للمتابعة.');
+      return {ok:false,code:'FIRST_LOGIN',firstLogin:true,error:'هذا أول دخول للحساب. أنشئ رقمًا سريًا جديدًا.'};
+    }
+    if (!/^[0-9]{4,}$/.test(newPassword)) throw new Error('الرقم السري يجب أن يتكون من 4 أرقام على الأقل.');
     salt = Utilities.getUuid() + Utilities.getUuid();
     hash = hashPassword_(newPassword,salt);
     getSheet_(CONFIG.ACCOUNTS_SHEET,ACCOUNT_HEADERS).getRange(account._row,5,1,2).setValues([[salt,hash]]);

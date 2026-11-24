@@ -5,7 +5,7 @@
   const CONFIG = {
     appVersion: "1.0.0",
     updateCheckUrl: "https://raw.githubusercontent.com/aliragab-coder/delta-reps/main/version.json",
-    sheetUrl: "https://script.google.com/macros/s/AKfycbykD1yw6qcqu3cV7D9MuIacI6zk2GRKdYKUTkxjOUDANx2iKrlfLz3gTLoae_6WoQq5YA/exec",
+    sheetUrl: "https://script.google.com/macros/s/AKfycbyooC2YPiSkImm1obs3xDaUmhuVVaZ_NV5WOi-v3CVKW7dmjRrJ81ChHekIIlhaKbEF9w/exec",
     sessionKey: "delta_session_token_v5",
     cacheKey: "delta_state_cache_v5",
     queueKey: "delta_mutation_queue_v1",
@@ -842,14 +842,24 @@
 
   function syncAuthFields() {
     const phone = normalizePhone($("loginPhoneInput")?.value);
-    if (phone !== lastLoginPhone) { firstLoginMode = false; lastLoginPhone = phone; }
+    if (phone !== lastLoginPhone) {
+      firstLoginMode = false;
+      lastLoginPhone = phone;
+      $("setupPasswordInput").value = "";
+      $("confirmPasswordInput").value = "";
+    }
     const account = state.accounts.find((item) => normalizePhone(item.phone) === phone);
-    const firstTime = firstLoginMode || Boolean(account && account.firstLogin);
-    $("existingPasswordBox")?.classList.toggle("hidden", firstTime);
-    $("firstTimeSetupBox")?.classList.toggle("hidden", !firstTime);
-    $("authTitle").textContent = firstTime ? "تعيين كلمة سر لأول مرة" : "تسجيل الدخول";
-    $("authHint").textContent = firstTime ? "اكتب كلمة سر جديدة لحسابك." : "أدخل رقم التليفون وكلمة السر المسجلة.";
-    $("phoneAuthBtn").textContent = firstTime ? "حفظ كلمة السر والدخول" : "تسجيل الدخول";
+    const accountNeedsSetup = Boolean(account && account.firstLogin);
+    $("existingPasswordBox")?.classList.toggle("hidden", firstLoginMode);
+    $("firstTimeSetupBox")?.classList.toggle("hidden", !firstLoginMode);
+    $("authTitle").textContent = firstLoginMode ? "إنشاء الرقم السري" : accountNeedsSetup ? "تفعيل الحساب لأول مرة" : "تسجيل الدخول";
+    $("authHint").textContent = firstLoginMode
+      ? "أنشئ رقمًا سريًا من أرقام فقط، 4 أرقام على الأقل."
+      : accountNeedsSetup
+        ? "اكتب أي رقم سري للمتابعة، وبعدها أنشئ رقمك السري الخاص."
+        : "أدخل رقم التليفون والرقم السري المسجل.";
+    $("loginPasswordInput").placeholder = accountNeedsSetup && !firstLoginMode ? "اكتب أي رقم للمتابعة" : "الرقم السري";
+    $("phoneAuthBtn").textContent = firstLoginMode ? "حفظ الرقم السري والدخول" : accountNeedsSetup ? "متابعة" : "تسجيل الدخول";
   }
 
   async function login() {
@@ -863,15 +873,16 @@
     const newPassword = $("setupPasswordInput").value;
     const confirmPassword = $("confirmPasswordInput").value;
     if (phone.length < 10) return alert("من فضلك أدخل رقم تليفون صحيح.");
-    const account = state.accounts.find((item) => normalizePhone(item.phone) === phone);
-    const firstTime = firstLoginMode || Boolean(account?.firstLogin);
-    if (firstTime && (newPassword.length < 4 || newPassword !== confirmPassword)) return alert("اكتب كلمة سر من 4 خانات على الأقل وتأكد من تطابقها.");
+    if (!firstLoginMode && !password) return showToast("اكتب أي رقم سري للمتابعة.", "warning");
+    if (firstLoginMode && (!/^[0-9]{4,}$/.test(newPassword) || newPassword !== confirmPassword)) {
+      return showToast("الرقم السري يجب أن يتكون من 4 أرقام على الأقل، ويجب أن يتطابق مع التأكيد.", "warning", 6000);
+    }
     busy = true;
     setAppLoading(true);
     $("phoneAuthBtn").disabled = true;
     showToast("جاري الدخول للحساب... برجاء الانتظار", "loading");
     try {
-      const result = await apiPost("login", { phone, password: firstTime ? "" : password, newPassword: firstTime ? newPassword : "" });
+      const result = await apiPost("login", { phone, password: firstLoginMode ? "" : password, newPassword: firstLoginMode ? newPassword : "" });
       localStorage.setItem(CONFIG.sessionKey, result.sessionToken);
       $("loginPasswordInput").value = "";
       $("setupPasswordInput").value = "";
@@ -885,8 +896,9 @@
     } catch (error) {
       if (error.code === "FIRST_LOGIN") {
         firstLoginMode = true;
+        $("loginPasswordInput").value = "";
         syncAuthFields();
-        showToast("هذا أول دخول للحساب. عيّن كلمة سر جديدة ثم حاول الدخول.", "warning", 6500);
+        showToast("أول دخول للحساب. أنشئ رقمًا سريًا من 4 أرقام على الأقل.", "warning", 6500);
       } else if (error.code === "PASSWORD_REQUIRED") {
         firstLoginMode = false;
         syncAuthFields();
