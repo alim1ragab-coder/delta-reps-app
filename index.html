@@ -8,7 +8,7 @@
   <title>مناديب الدلتا | TAGADDOD</title>
   <link rel="icon" href="icon.png" type="image/png">
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="styles.css?v=offline-sync-v1">
+  <link rel="stylesheet" href="styles.css?v=async-action-feedback-v1">
 </head>
 <body>
   <div id="appSplash" class="app-splash" role="dialog" aria-label="شاشة بدء التطبيق">
@@ -308,9 +308,8 @@
   </main>
 
   <footer>Designed &amp; Structured by ALI RAGAB - TAGADDOD</footer>
-  <script defer src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
-  <script defer src="analysis.js?v=rep-name-time-v3"></script>
-  <script defer src="app.js?v=script-url-v4"></script>
+  <script defer src="analysis.js?v=async-action-feedback-v1"></script>
+  <script defer src="app.js?v=async-action-feedback-v1"></script>
   <script>
     (function () {
       const splash = document.getElementById("appSplash");
@@ -323,7 +322,7 @@
         setTimeout(() => splash.remove(), 220);
       }
       skip?.addEventListener("click", hideSplash);
-      splashTimer = setTimeout(hideSplash, 1800);
+      splashTimer = setTimeout(hideSplash, 1000);
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", () => {
           navigator.serviceWorker.register("./sw.js")

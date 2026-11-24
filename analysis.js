@@ -4,6 +4,25 @@
 
   const STORAGE_KEY = "delta_local_lab_analyses_v1";
   const $ = (id) => document.getElementById(id);
+  const deletingAnalysisIds = new Set();
+  async function withAnalysisButtonProgress(button, loadingMessage, action) {
+    if (!button || button.dataset.actionPending === "true") return false;
+    const originalText = button.textContent;
+    button.dataset.actionPending = "true";
+    button.setAttribute("aria-busy", "true");
+    button.textContent = loadingMessage;
+    window.showAppToast?.(loadingMessage, "loading");
+    try {
+      return await action();
+    } catch (error) {
+      window.showAppToast?.(error.message || "تعذر تنفيذ العملية.", "error", 6000);
+      return false;
+    } finally {
+      delete button.dataset.actionPending;
+      button.removeAttribute("aria-busy");
+      if (button.isConnected) button.textContent = originalText;
+    }
+  }
   const num = (id) => {
     const v = Number($(id)?.value);
     return Number.isFinite(v) ? v : 0;
@@ -90,31 +109,55 @@
       tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;">لا توجد تحاليل محفوظة على هذا الجهاز حتى الآن.</td></tr>`;
       return;
     }
-    tbody.innerHTML = items.map((item, idx) => `
-      <tr>
-        <td data-label="العميل">${escapeHtml(item.clientName)}</td>
-        <td data-label="الأحماض">${Number(item.acidPct || 0).toFixed(2)}%</td>
-        <td data-label="المياه">${Number(item.waterPct || 0).toFixed(2)}%</td>
-        <td data-label="الرواسب">${Number(item.sedimentPct || 0).toFixed(2)}%</td>
-        <td data-label="خصم/طن">${Number(item.deductionPerTon || 0)} كجم</td>
-        <td data-label="إجراء">
-          <button type="button" class="btn btn-danger btn-sm del-lab-btn" data-index="${idx}">حذف</button>
-        </td>
-      </tr>
-    `).join("");
+    tbody.innerHTML = items.map((item, idx) => {
+      const isDeleting = deletingAnalysisIds.has(item.id || `local:${idx}`);
+      return `
+        <tr>
+          <td data-label="العميل">${escapeHtml(item.clientName)}</td>
+          <td data-label="الأحماض">${Number(item.acidPct || 0).toFixed(2)}%</td>
+          <td data-label="المياه">${Number(item.waterPct || 0).toFixed(2)}%</td>
+          <td data-label="الرواسب">${Number(item.sedimentPct || 0).toFixed(2)}%</td>
+          <td data-label="خصم/طن">${Number(item.deductionPerTon || 0)} كجم</td>
+          <td data-label="إجراء">
+            <button type="button" class="btn btn-danger btn-sm del-lab-btn" data-index="${idx}" ${isDeleting ? 'disabled aria-busy="true"' : ""}>${isDeleting ? "جاري الحذف..." : "حذف"}</button>
+          </td>
+        </tr>
+      `;
+    }).join("");
 
     tbody.querySelectorAll(".del-lab-btn").forEach((btn) => {
       btn.addEventListener("click", async () => {
         const idx = Number(btn.dataset.index);
         const list = readSaved();
         const item = list[idx];
-        if (item?.id && typeof window.deleteServerAnalysis === "function") {
-          if (!await window.deleteServerAnalysis(item.id)) return;
+        if (!item) return;
+        const deletionKey = item.id || `local:${idx}`;
+        if (deletingAnalysisIds.has(deletionKey)) return;
+        deletingAnalysisIds.add(deletionKey);
+        btn.disabled = true;
+        btn.setAttribute("aria-busy", "true");
+        btn.textContent = "جاري الحذف...";
+        let deleted = false;
+        try {
+          if (item.id && typeof window.deleteServerAnalysis === "function") {
+            if (!await window.deleteServerAnalysis(item.id)) return;
+          }
+          const current = readSaved();
+          const remaining = item.id
+            ? current.filter((entry) => entry.id !== item.id)
+            : current.filter((_, currentIndex) => currentIndex !== idx);
+          writeSaved(remaining);
+          renderSavedLabAnalyses();
+          deleted = true;
+          window.showAppToast?.("تم حذف التحليل المحفوظ.", "success");
+        } finally {
+          deletingAnalysisIds.delete(deletionKey);
+          if (!deleted && btn.isConnected) {
+            btn.disabled = false;
+            btn.removeAttribute("aria-busy");
+            btn.textContent = "حذف";
+          }
         }
-        const remaining = list.filter((_, i) => i !== idx);
-        writeSaved(remaining);
-        renderSavedLabAnalyses();
-        window.showAppToast?.("تم حذف التحليل المحفوظ.", "success");
       });
     });
   }
@@ -141,7 +184,7 @@
     renderSavedLabAnalyses();
   };
 
-  function saveCurrentAnalysis() {
+  async function saveCurrentAnalysis() {
     const res = computeAnalysis();
     const list = readSaved();
     const item = {
@@ -152,13 +195,12 @@
     writeSaved(list);
     renderSavedLabAnalyses();
     if (navigator.onLine && typeof window.syncAnalysisToServer === "function") {
-      window.syncAnalysisToServer(item).then((saved) => {
-        if (saved) {
-          item.id = saved.id;
-          writeSaved([item, ...readSaved().filter((entry, index) => index !== 0)]);
-          renderSavedLabAnalyses();
-        }
-      });
+      const saved = await window.syncAnalysisToServer(item);
+      if (saved) {
+        item.id = saved.id;
+        writeSaved([item, ...readSaved().filter((entry, index) => index !== 0)]);
+        renderSavedLabAnalyses();
+      }
     } else {
       window.showAppToast?.("تم حفظ التحليل على الجهاز. سجل دخولك وسجّله على Google Sheets.", "warning");
     }
@@ -365,8 +407,12 @@
       $(id)?.addEventListener("input", updateDisplay);
       $(id)?.addEventListener("change", updateDisplay);
     });
-    $("saveLabAnalysisBtn")?.addEventListener("click", saveCurrentAnalysis);
-    $("shareLabImageBtn")?.addEventListener("click", shareAnalysisImage);
+    $("saveLabAnalysisBtn")?.addEventListener("click", (event) => {
+      withAnalysisButtonProgress(event.currentTarget, "جاري حفظ التحليل...", saveCurrentAnalysis);
+    });
+    $("shareLabImageBtn")?.addEventListener("click", (event) => {
+      withAnalysisButtonProgress(event.currentTarget, "جاري تجهيز صورة التحليل...", shareAnalysisImage);
+    });
     $("clearLabFormBtn")?.addEventListener("click", clearLabInputs);
     updateDisplay();
     renderSavedLabAnalyses();

@@ -364,6 +364,11 @@ button:disabled {
   cursor: not-allowed;
 }
 
+button[data-action-pending="true"] {
+  opacity: 0.7;
+  cursor: progress;
+}
+
 .secondary {
   background: #f3f4f6;
   color: var(--slate);

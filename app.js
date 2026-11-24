@@ -6,6 +6,7 @@
     appVersion: "1.0.0",
     updateCheckUrl: "https://raw.githubusercontent.com/aliragab-coder/delta-reps/main/version.json",
     sheetUrl: "https://script.google.com/macros/s/AKfycbyooC2YPiSkImm1obs3xDaUmhuVVaZ_NV5WOi-v3CVKW7dmjRrJ81ChHekIIlhaKbEF9w/exec",
+    xlsxUrl: "https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js",
     sessionKey: "delta_session_token_v5",
     cacheKey: "delta_state_cache_v5",
     queueKey: "delta_mutation_queue_v1",
@@ -16,7 +17,8 @@
   let state = { user: null, accounts: [], trips: [], extraDays: [], analyses: [], tripCount: 0, approvedTripCount: 0, pendingTripCount: 0, pendingTripIds: [], approvedAllowance: 0, extraCount: 0, pendingExtraCount: 0, pendingExtraIds: [], queueVersion: 0, allowance: 50 };
   let currentPage = 1;
   let extraCurrentPage = 1;
-  let busy = false;
+  let mutationBusy = false;
+  let loginBusy = false;
   let firstLoginMode = false;
   let lastLoginPhone = "";
   let lastStateError = "";
@@ -25,6 +27,7 @@
   let mutationQueue = [];
   let queueSyncBusy = false;
   let activeQueueRequestId = "";
+  let xlsxLoadPromise = null;
 
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -88,6 +91,31 @@
   }
   window.showAppToast = showToast;
 
+  async function withButtonProgress(button, loadingMessage, action) {
+    if (!button || button.dataset.actionPending === "true") return false;
+    const originalText = button.textContent;
+    button.dataset.actionPending = "true";
+    button.setAttribute("aria-busy", "true");
+    button.textContent = loadingMessage;
+    showToast(loadingMessage, "loading");
+    try {
+      return await action(button);
+    } catch (error) {
+      showToast(error.message || "تعذر تنفيذ العملية.", "error", 6000);
+      return false;
+    } finally {
+      delete button.dataset.actionPending;
+      button.removeAttribute("aria-busy");
+      if (button.isConnected) button.textContent = originalText;
+    }
+  }
+
+  function bindProgressClick(button, loadingMessage, action) {
+    button?.addEventListener("click", (event) => {
+      withButtonProgress(event.currentTarget, loadingMessage, action);
+    });
+  }
+
   function setAppLoading(enabled) {
     appLoadingDepth = Math.max(0, appLoadingDepth + (enabled ? 1 : -1));
     document.body?.classList.toggle("app-loading", appLoadingDepth > 0);
@@ -109,6 +137,30 @@
     badge.textContent = online ? "متصل بالإنترنت" : "غير متصل";
     badge.classList.toggle("status-online", online);
     badge.classList.toggle("status-offline", !online);
+  }
+
+  function loadXlsxLibrary() {
+    if (typeof XLSX !== "undefined") return Promise.resolve();
+    if (!navigator.onLine) return Promise.reject(new Error("اتصل بالإنترنت لتحميل مكتبة Excel."));
+    if (xlsxLoadPromise) return xlsxLoadPromise;
+    xlsxLoadPromise = new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.async = true;
+      script.src = CONFIG.xlsxUrl;
+      script.onload = () => {
+        if (typeof XLSX !== "undefined") return resolve();
+        xlsxLoadPromise = null;
+        script.remove();
+        reject(new Error("تعذر تهيئة مكتبة Excel."));
+      };
+      script.onerror = () => {
+        xlsxLoadPromise = null;
+        script.remove();
+        reject(new Error("تعذر تحميل مكتبة Excel. تأكد من الاتصال بالإنترنت ثم حاول."));
+      };
+      document.head.appendChild(script);
+    });
+    return xlsxLoadPromise;
   }
 
   function apiGet(params = {}, timeoutMs = 10000) {
@@ -272,10 +324,14 @@
         : item.action === "review_records" ? "إلغاء القرار المعلّق" : "إلغاء التسجيل المعلّق";
     button.disabled = isSending;
     button.addEventListener("click", async () => {
-      if (item.status === "failed" || item.hasAttempted) await retryQueuedMutation(item.requestId);
-      else if (confirm(item.action === "review_records"
+      if (button.dataset.actionPending === "true") return;
+      if (item.status === "failed" || item.hasAttempted) {
+        await withButtonProgress(button, "جاري إعادة الإرسال...", () => retryQueuedMutation(item.requestId));
+      } else if (confirm(item.action === "review_records"
         ? "إلغاء هذا القرار سيشمل كل السجلات المرتبطة به في هذه الدفعة. هل تريد المتابعة؟"
-        : "هل تريد إلغاء هذا التسجيل المحفوظ على الجهاز؟")) removeQueuedMutation(item.requestId);
+        : "هل تريد إلغاء هذا التسجيل المحفوظ على الجهاز؟")) {
+        await withButtonProgress(button, "جاري الإلغاء...", () => removeQueuedMutation(item.requestId));
+      }
     });
     const controls = document.createElement("div");
     controls.className = "review-actions";
@@ -288,7 +344,6 @@
   }
 
   function enqueueMutation(action, payload) {
-    if (busy) return false;
     if (!state.user) {
       openLogin();
       return false;
@@ -392,7 +447,7 @@
         }
       }
       if (didSync) {
-        await pullState(false, true);
+        await pullState(false);
         renderAll();
       }
       return didSync;
@@ -447,7 +502,7 @@
     if (typeof window.mergeServerAnalyses === "function") window.mergeServerAnalyses(data.analyses);
   }
 
-  async function pullState(showMessage = false, nonBlocking = false) {
+  async function pullState(showMessage = false) {
     lastStateError = "";
     if (!sessionToken()) return false;
     if (!navigator.onLine) {
@@ -455,7 +510,6 @@
       if (showMessage) setStatus("أنت غير متصل. يتم عرض آخر بيانات محفوظة على هذا الجهاز.", "warning");
       return false;
     }
-    if (!nonBlocking) setAppLoading(true);
     try {
       if (showMessage) setStatus("جاري تحديث البيانات من Google Sheets...", "loading");
       const response = await apiPost("get_state", { tripPage: currentPage, extraPage: extraCurrentPage });
@@ -467,19 +521,19 @@
       lastStateError = error.message || "تعذر تحميل بيانات الحساب من Google Sheets.";
       if (showMessage) setStatus(error.message, "error");
       return false;
-    } finally {
-      if (!nonBlocking) setAppLoading(false);
     }
   }
 
   async function runMutation(action, payload, successMessage, loadingMessage = "جاري تنفيذ العملية...") {
-    if (busy) return false;
+    if (mutationBusy) {
+      showToast("هناك عملية أخرى قيد التنفيذ. انتظر تأكيدها ثم حاول مرة أخرى.", "warning", 5000);
+      return false;
+    }
     if (!navigator.onLine) {
       showToast("النت فاصل. افتح النت الأول وبعد كده سجل.", "error", 6000);
       return false;
     }
-    busy = true;
-    setAppLoading(true);
+    mutationBusy = true;
     showToast(loadingMessage, "loading");
     try {
       await apiPost(action, payload);
@@ -490,8 +544,7 @@
       setStatus(error.message, "error");
       return false;
     } finally {
-      busy = false;
-      setAppLoading(false);
+      mutationBusy = false;
     }
   }
 
@@ -500,33 +553,29 @@
       showToast("سجل الدخول أولًا حتى يتسجل التحليل على Google Sheets.", "warning", 6000);
       return null;
     }
-    setAppLoading(true);
+    showToast("جاري تسجيل التحليل على Google Sheets...", "loading");
     try {
       const result = await apiPost("add_analysis", { analysis });
-      await pullState(false);
+      pullState(false);
       showToast("تم حفظ التحليل على Google Sheets.", "success");
       return { id: result.analysisId };
     } catch (error) {
       showToast(error.message || "تعذر مزامنة التحليل.", "error", 6000);
       return null;
-    } finally {
-      setAppLoading(false);
     }
   };
 
   window.deleteServerAnalysis = async function (id) {
     if (!id) return true;
     if (!sessionToken()) return true;
-    setAppLoading(true);
+    showToast("جاري حذف التحليل من Google Sheets...", "loading");
     try {
       await apiPost("delete_analysis", { id });
-      await pullState(false);
+      pullState(false);
       return true;
     } catch (error) {
       showToast(error.message || "تعذر حذف التحليل من Google Sheets.", "error", 6000);
       return false;
-    } finally {
-      setAppLoading(false);
     }
   };
 
@@ -657,8 +706,10 @@
         reset.className = "btn btn-secondary";
         reset.textContent = "إعادة كلمة السر";
         reset.addEventListener("click", async () => {
+          if (reset.dataset.actionPending === "true") return;
           if (!confirm(`سيتم إلغاء كلمة سر ${account.name}. عند الدخول التالي سيتعين عليه تعيين كلمة سر جديدة. هل تريد المتابعة؟`)) return;
-          await runMutation("reset_password", { phone: account.phone }, "تمت إعادة ضبط كلمة السر.", "جاري إعادة ضبط كلمة السر...");
+          await withButtonProgress(reset, "جاري إعادة ضبط كلمة السر...", () =>
+            runMutation("reset_password", { phone: account.phone }, "تمت إعادة ضبط كلمة السر.", "جاري إعادة ضبط كلمة السر..."));
         });
         li.appendChild(reset);
       }
@@ -671,8 +722,10 @@
       remove.disabled = account.phone === state.user?.phone || primaryAdmin || (account.role === "admin" && !currentIsPrimary);
       remove.title = remove.disabled ? "لا يمكن حذف هذا الحساب بالصلاحيات الحالية" : "حذف الحساب";
       remove.addEventListener("click", async () => {
+        if (remove.dataset.actionPending === "true") return;
         if (!confirm(`تأكيد حذف حساب ${account.name}؟`)) return;
-        await runMutation("delete_account", { phone: account.phone }, "تم حذف الحساب بنجاح.", "جاري حذف الحساب...");
+        await withButtonProgress(remove, "جاري حذف الحساب...", () =>
+          runMutation("delete_account", { phone: account.phone }, "تم حذف الحساب بنجاح.", "جاري حذف الحساب..."));
       });
       li.appendChild(remove);
       list.appendChild(li);
@@ -701,7 +754,7 @@
     });
   }
 
-  async function bulkReview(type, status) {
+  async function bulkReview(type, status, button) {
     if (!isAdmin()) return showToast("مراجعة السجلات متاحة للمشرف فقط.", "error");
     const allIds = type === "trip" ? state.pendingTripIds : state.pendingExtraIds;
     const ids = allIds.filter((id) => !queuedReview(type, id));
@@ -715,17 +768,18 @@
     const noun = type === "trip" ? "رحلة" : "يوم إضافي";
     const verb = status === "approved" ? "قبول" : "رفض";
     if (!confirm(`سيتم ${verb} ${ids.length} ${noun} معلّق دفعة واحدة. سيظل القرار معلّقًا حتى يؤكده Google Sheets. هل تريد المتابعة؟`)) return;
-    await enqueueMutation("review_records", {type, ids, status});
+    await withButtonProgress(button, "جاري حفظ القرار...", () =>
+      enqueueMutation("review_records", {type, ids, status}));
   }
 
-  async function retryFailedReviews(type) {
+  async function retryFailedReviews(type, button) {
     const failedIds = new Set(currentUserQueue()
       .filter((item) => item.action === "review_records" && item.payload.type === type && item.status === "failed")
       .map((item) => item.requestId));
     if (!failedIds.size) return;
     const nextQueue = mutationQueue.map((item) => failedIds.has(item.requestId) ? { ...item, status: "queued", error: "" } : item);
     if (!persistMutationQueue(nextQueue)) return;
-    await syncMutationQueue();
+    await withButtonProgress(button, "جاري إعادة إرسال القرارات...", () => syncMutationQueue());
   }
 
   function applyConfirmedReview(item, result) {
@@ -785,8 +839,12 @@
           button.className = status === "approved" ? "btn btn-success btn-sm" : "btn btn-danger btn-sm";
           button.textContent = label;
           button.addEventListener("click", async () => {
+            if (button.dataset.actionPending === "true") return;
             const prompt = status === "approved" ? "هل تريد قبول الرحلة واحتساب بدلها؟" : "هل تريد رفض الرحلة وعدم احتساب بدلها؟";
-            if (confirm(prompt)) await enqueueMutation("review_records", {type:"trip",ids:[trip.id],status});
+            if (confirm(prompt)) {
+              await withButtonProgress(button, "جاري حفظ القرار...", () =>
+                enqueueMutation("review_records", {type:"trip",ids:[trip.id],status}));
+            }
           });
           controls.appendChild(button);
         });
@@ -806,7 +864,11 @@
           button.disabled = Boolean(reviewQueueItem);
           button.title = reviewQueueItem ? "ألغِ قرار المراجعة المعلّق أولًا" : "حذف الرحلة";
           button.addEventListener("click", async () => {
-            if (confirm("هل تريد حذف هذه الرحلة نهائيًا؟")) await runMutation("delete_trip", { id: trip.id }, "تم حذف الرحلة بنجاح.", "جاري حذف الرحلة...");
+            if (button.dataset.actionPending === "true") return;
+            if (confirm("هل تريد حذف هذه الرحلة نهائيًا؟")) {
+              await withButtonProgress(button, "جاري حذف الرحلة...", () =>
+                runMutation("delete_trip", { id: trip.id }, "تم حذف الرحلة بنجاح.", "جاري حذف الرحلة..."));
+            }
           });
           cell.appendChild(button);
         }
@@ -863,7 +925,7 @@
   }
 
   async function login() {
-    if (busy) return;
+    if (loginBusy) return;
     if (!navigator.onLine) {
       showToast("النت فاصل. افتح النت الأول وبعد كده سجل الدخول.", "error", 6000);
       return;
@@ -877,9 +939,11 @@
     if (firstLoginMode && (!/^[0-9]{4,}$/.test(newPassword) || newPassword !== confirmPassword)) {
       return showToast("الرقم السري يجب أن يتكون من 4 أرقام على الأقل، ويجب أن يتطابق مع التأكيد.", "warning", 6000);
     }
-    busy = true;
-    setAppLoading(true);
-    $("phoneAuthBtn").disabled = true;
+    loginBusy = true;
+    const loginButton = $("phoneAuthBtn");
+    loginButton.disabled = true;
+    loginButton.setAttribute("aria-busy", "true");
+    loginButton.textContent = "جاري تسجيل الدخول...";
     showToast("جاري الدخول للحساب... برجاء الانتظار", "loading");
     try {
       const result = await apiPost("login", { phone, password: firstLoginMode ? "" : password, newPassword: firstLoginMode ? newPassword : "" });
@@ -907,9 +971,10 @@
         showToast(error.message, "error", 6000);
       }
     } finally {
-      busy = false;
-      setAppLoading(false);
-      $("phoneAuthBtn").disabled = false;
+      loginBusy = false;
+      loginButton.disabled = false;
+      loginButton.removeAttribute("aria-busy");
+      syncAuthFields();
     }
   }
 
@@ -1017,8 +1082,10 @@
           button.className = status === "approved" ? "btn btn-success btn-sm" : "btn btn-danger btn-sm";
           button.textContent = label;
           button.addEventListener("click", async () => {
+            if (button.dataset.actionPending === "true") return;
             if (!confirm(status === "approved" ? "هل تريد قبول اليوم الإضافي؟" : "هل تريد رفض اليوم الإضافي؟")) return;
-            await enqueueMutation("review_records", {type:"extra",ids:[item.id],status});
+            await withButtonProgress(button, "جاري حفظ القرار...", () =>
+              enqueueMutation("review_records", {type:"extra",ids:[item.id],status}));
           });
           controls.appendChild(button);
         });
@@ -1038,7 +1105,11 @@
           button.disabled = Boolean(reviewQueueItem);
           button.title = reviewQueueItem ? "ألغِ قرار المراجعة المعلّق أولًا" : "حذف سجل اليوم الإضافي";
           button.addEventListener("click", async () => {
-            if (confirm("هل تريد حذف سجل اليوم الإضافي؟")) await runMutation("delete_extra_day", { id: item.id }, "تم حذف اليوم الإضافي بنجاح.", "جاري الحذف...");
+            if (button.dataset.actionPending === "true") return;
+            if (confirm("هل تريد حذف سجل اليوم الإضافي؟")) {
+              await withButtonProgress(button, "جاري الحذف...", () =>
+                runMutation("delete_extra_day", { id: item.id }, "تم حذف اليوم الإضافي بنجاح.", "جاري الحذف..."));
+            }
           });
           cell.appendChild(button);
         }
@@ -1061,12 +1132,12 @@
 
   async function exportExtraExcel() {
     if (!isAdmin()) return showToast("تصدير Excel متاح للمشرف فقط.", "error");
-    if (typeof XLSX === "undefined") return showToast("مكتبة Excel لم تُحمّل.", "error");
     const from = $("extraFromDate").value;
     const to = $("extraToDate").value;
     if (!from || !to) return showToast("حدد تاريخ البداية والنهاية.", "warning");
-    setAppLoading(true);
+    showToast("جاري تجهيز ملف Excel...", "loading");
     try {
+      await loadXlsxLibrary();
       const result = await apiPost("list_extra_days", { from, to });
       if (!result?.ok) throw new Error(result?.error || "تعذر تحميل السجلات.");
       const aoa = [
@@ -1081,24 +1152,22 @@
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb,ws,"الأيام الإضافية");
       XLSX.writeFile(wb,`الأيام_الإضافية_${from}_${to}.xlsx`);
+    showToast("تم تصدير سجل الأيام الإضافية بنجاح.", "success");
     } catch (error) {
       showToast(error.message || "تعذر تصدير الأيام الإضافية.", "error", 6000);
-    } finally {
-      setAppLoading(false);
     }
   }
 
   async function exportExcel() {
     if (!isAdmin()) return showToast("تصدير Excel متاح للمشرف فقط.", "error");
-    if (typeof XLSX === "undefined") return showToast("مكتبة Excel لم تُحمّل. تأكد من الإنترنت ثم حاول مرة أخرى.", "error", 6000);
     const from = $("fromDate").value;
     const to = $("toDate").value;
     if (!from || !to) return showToast("حدد تاريخ البداية والنهاية قبل التصدير.", "warning");
     if (from > to) return showToast("تاريخ البداية يجب ألا يكون بعد تاريخ النهاية.", "warning");
 
-    showToast("جاري تجهيز ملف Excel وتنسيق الجداول...", "loading");
-    setAppLoading(true);
+    showToast("جاري تحميل مكتبة Excel وتجهيز التقرير...", "loading");
     try {
+      await loadXlsxLibrary();
       const listResult = await apiPost("list_trips", { from, to });
       if (!listResult?.ok) throw new Error(listResult?.error || "تعذر تحميل الرحلات للتصدير.");
       const rows = Array.isArray(listResult.trips) ? listResult.trips : [];
@@ -1175,8 +1244,6 @@
       showToast(`تم تصدير ${rows.length} رحلة؛ إجمالي البدل محسوب للرحلات المقبولة فقط.`, "success");
     } catch (error) {
       showToast(`تعذر تصدير الملف: ${error.message || "خطأ غير معروف"}`, "error", 6000);
-    } finally {
-      setAppLoading(false);
     }
   }
 
@@ -1217,7 +1284,7 @@
   }
 
   function bindEvents() {
-    $("checkUpdateBtn")?.addEventListener("click", () => checkForAppUpdate(true));
+    bindProgressClick($("checkUpdateBtn"), "جاري البحث عن تحديث...", () => checkForAppUpdate(true));
     $("loginPhoneInput").addEventListener("input", syncAuthFields);
     $("loginPhoneInput").addEventListener("change", syncAuthFields);
     $("loginForm").addEventListener("submit", (event) => { event.preventDefault(); login(); });
@@ -1226,7 +1293,7 @@
     ["backToSamplesBtn", "cancelLoginBtn"].forEach((id) => $(id).addEventListener("click", () => { setView("app"); switchTab("analysisTab"); }));
     $("openChangePassBtn").addEventListener("click", () => { $("updatePhoneInput").value = ""; $("updatePhoneInput").placeholder = state.user?.phone || "اتركه فارغًا دون تغيير"; setView("profile"); });
     $("closeProfileModalBtn").addEventListener("click", () => setView("app"));
-    $("saveProfileChangesBtn").addEventListener("click", saveProfile);
+    bindProgressClick($("saveProfileChangesBtn"), "جاري تجهيز التعديلات...", saveProfile);
     $("logoutBtn").addEventListener("click", () => {
       if (navigator.onLine && sessionToken()) apiPost("logout", {}).catch(() => {});
       localStorage.removeItem(CONFIG.sessionKey);
@@ -1241,66 +1308,75 @@
       showToast("تم تسجيل الخروج.", "success");
     });
     document.querySelectorAll(".tab-btn").forEach((button) => button.addEventListener("click", () => switchTab(button.dataset.tab)));
-    $("tripForm").addEventListener("submit", async (event) => {
+    $("tripForm").addEventListener("submit", (event) => {
       event.preventDefault();
-      if (!state.user) return openLogin();
-      const date = $("tripDate").value;
-      const place = $("tripPlace").value.trim();
-      const client = $("tripClient").value.trim();
-      const allowance = Number($("tripAllowance").value);
-      if (!date || !place || !client || !Number.isFinite(allowance) || allowance < 0) return showToast("راجع بيانات الرحلة والبدل قبل التسجيل.", "warning");
-      const repPhone = isAdmin() ? $("tripRepSelect").value : state.user.phone;
-      const ok = await enqueueMutation("add_trip", { date, place, client, allowance, repPhone, timestamp: formatTimestamp(new Date()) });
-      if (ok) { $("tripPlace").value = ""; $("tripClient").value = ""; currentPage = 1; renderTrips(); }
+      const form = event.currentTarget;
+      withButtonProgress(event.submitter || form.querySelector('button[type="submit"]'), "جاري حفظ الرحلة...", async () => {
+        if (!state.user) return openLogin();
+        const date = $("tripDate").value;
+        const place = $("tripPlace").value.trim();
+        const client = $("tripClient").value.trim();
+        const allowance = Number($("tripAllowance").value);
+        if (!date || !place || !client || !Number.isFinite(allowance) || allowance < 0) return showToast("راجع بيانات الرحلة والبدل قبل التسجيل.", "warning");
+        const repPhone = isAdmin() ? $("tripRepSelect").value : state.user.phone;
+        const ok = await enqueueMutation("add_trip", { date, place, client, allowance, repPhone, timestamp: formatTimestamp(new Date()) });
+        if (ok) { $("tripPlace").value = ""; $("tripClient").value = ""; currentPage = 1; renderTrips(); }
+      });
     });
-    $("extraDayForm").addEventListener("submit", async (event) => {
+    $("extraDayForm").addEventListener("submit", (event) => {
       event.preventDefault();
-      if (!state.user) return openLogin();
-      const date = $("extraDayDate").value;
-      const reason = $("extraDayReason").value.trim();
-      if (!date || !reason) return showToast("أدخل تاريخ اليوم وسبب التكليف.", "warning");
-      try {
-        const proof = await readProofImage($("extraDayProofInput").files?.[0]);
-        const repPhone = isAdmin() ? $("extraDayRepSelect").value : state.user.phone;
-        const ok = await enqueueMutation("add_extra_day", { date, reason, repPhone, proofData: proof.dataUrl, proofName: proof.name, proofType: proof.type });
-        if (ok) { $("extraDayReason").value = ""; $("extraDayProofInput").value = ""; extraCurrentPage = 1; renderExtraDays(); }
-      } catch (error) {
-        showToast(error.message || "تعذر تجهيز صورة الإثبات.", "error", 6000);
-      }
+      const form = event.currentTarget;
+      withButtonProgress(event.submitter || form.querySelector('button[type="submit"]'), "جاري تجهيز اليوم الإضافي...", async () => {
+        if (!state.user) return openLogin();
+        const date = $("extraDayDate").value;
+        const reason = $("extraDayReason").value.trim();
+        if (!date || !reason) return showToast("أدخل تاريخ اليوم وسبب التكليف.", "warning");
+        try {
+          const proof = await readProofImage($("extraDayProofInput").files?.[0]);
+          const repPhone = isAdmin() ? $("extraDayRepSelect").value : state.user.phone;
+          const ok = await enqueueMutation("add_extra_day", { date, reason, repPhone, proofData: proof.dataUrl, proofName: proof.name, proofType: proof.type });
+          if (ok) { $("extraDayReason").value = ""; $("extraDayProofInput").value = ""; extraCurrentPage = 1; renderExtraDays(); }
+        } catch (error) {
+          showToast(error.message || "تعذر تجهيز صورة الإثبات.", "error", 6000);
+        }
+      });
     });
-    $("addRepForm").addEventListener("submit", async (event) => {
+    $("addRepForm").addEventListener("submit", (event) => {
       event.preventDefault();
       if (!isAdmin()) return alert("غير مصرح.");
-      const name = $("newRepName").value.trim();
-      const phone = normalizePhone($("newRepPhone").value);
-      const role = $("newRepRole").value;
-      if (!name || phone.length < 10) return showToast("أدخل اسمًا ورقم تليفون صحيحًا.", "warning");
-      const ok = await runMutation("add_account", { name, phone, role }, "تم إضافة الحساب بنجاح.", "جاري إضافة الحساب...");
-      if (ok) { $("newRepName").value = ""; $("newRepPhone").value = ""; }
+      const form = event.currentTarget;
+      withButtonProgress(event.submitter || form.querySelector('button[type="submit"]'), "جاري إضافة الحساب...", async () => {
+        const name = $("newRepName").value.trim();
+        const phone = normalizePhone($("newRepPhone").value);
+        const role = $("newRepRole").value;
+        if (!name || phone.length < 10) return showToast("أدخل اسمًا ورقم تليفون صحيحًا.", "warning");
+        const ok = await runMutation("add_account", { name, phone, role }, "تم إضافة الحساب بنجاح.", "جاري إضافة الحساب...");
+        if (ok) { $("newRepName").value = ""; $("newRepPhone").value = ""; }
+      });
     });
-    $("saveAllowanceBtn").addEventListener("click", async () => {
+    bindProgressClick($("saveAllowanceBtn"), "جاري حفظ بدل السفر...", async () => {
       const allowance = Number($("defaultAllowanceInput").value);
       if (!Number.isFinite(allowance) || allowance < 0) return showToast("أدخل قيمة بدل صحيحة.", "warning");
       await runMutation("set_allowance", { allowance }, "تم حفظ بدل السفر الافتراضي بنجاح.", "جاري حفظ بدل السفر...");
     });
     ["fromDate", "toDate"].forEach((id) => $(id).addEventListener("change", () => { currentPage = 1; renderTrips(); }));
     $("tripSearchInput").addEventListener("input", () => { currentPage = 1; renderTrips(); });
-    $("prevTripsPageBtn").addEventListener("click", () => { currentPage -= 1; pullState(true); });
-    $("nextTripsPageBtn").addEventListener("click", () => { currentPage += 1; pullState(true); });
-    $("exportExcelBtn").addEventListener("click", exportExcel);
-    $("syncNowBtn").addEventListener("click", async () => { await pullState(true); await syncMutationQueue(); });
-    $("approveAllTripsBtn").addEventListener("click", () => bulkReview("trip", "approved"));
-    $("rejectAllTripsBtn").addEventListener("click", () => bulkReview("trip", "rejected"));
-    $("retryFailedTripsBtn").addEventListener("click", () => retryFailedReviews("trip"));
+    bindProgressClick($("prevTripsPageBtn"), "جاري تحديث الرحلات...", async () => { currentPage -= 1; await pullState(true); });
+    bindProgressClick($("nextTripsPageBtn"), "جاري تحديث الرحلات...", async () => { currentPage += 1; await pullState(true); });
+    bindProgressClick($("exportExcelBtn"), "جاري تجهيز ملف Excel...", exportExcel);
+    bindProgressClick($("syncNowBtn"), "جاري تحديث البيانات...", async () => { await pullState(true); await syncMutationQueue(); });
+    $("approveAllTripsBtn").addEventListener("click", (event) => bulkReview("trip", "approved", event.currentTarget));
+    $("rejectAllTripsBtn").addEventListener("click", (event) => bulkReview("trip", "rejected", event.currentTarget));
+    $("retryFailedTripsBtn").addEventListener("click", (event) => retryFailedReviews("trip", event.currentTarget));
     ["extraFromDate","extraToDate"].forEach((id) => $(id).addEventListener("change", () => { extraCurrentPage = 1; renderExtraDays(); }));
     $("extraSearchInput").addEventListener("input", () => { extraCurrentPage = 1; renderExtraDays(); });
-    $("prevExtraPageBtn").addEventListener("click", () => { extraCurrentPage -= 1; pullState(true); });
-    $("nextExtraPageBtn").addEventListener("click", () => { extraCurrentPage += 1; pullState(true); });
-    $("exportExtraExcelBtn").addEventListener("click", exportExtraExcel);
-    $("syncExtraNowBtn").addEventListener("click", async () => { await pullState(true); await syncMutationQueue(); });
-    $("approveAllExtraBtn").addEventListener("click", () => bulkReview("extra", "approved"));
-    $("rejectAllExtraBtn").addEventListener("click", () => bulkReview("extra", "rejected"));
-    $("retryFailedExtraBtn").addEventListener("click", () => retryFailedReviews("extra"));
+    bindProgressClick($("prevExtraPageBtn"), "جاري تحديث الأيام الإضافية...", async () => { extraCurrentPage -= 1; await pullState(true); });
+    bindProgressClick($("nextExtraPageBtn"), "جاري تحديث الأيام الإضافية...", async () => { extraCurrentPage += 1; await pullState(true); });
+    bindProgressClick($("exportExtraExcelBtn"), "جاري تجهيز ملف Excel...", exportExtraExcel);
+    bindProgressClick($("syncExtraNowBtn"), "جاري تحديث البيانات...", async () => { await pullState(true); await syncMutationQueue(); });
+    $("approveAllExtraBtn").addEventListener("click", (event) => bulkReview("extra", "approved", event.currentTarget));
+    $("rejectAllExtraBtn").addEventListener("click", (event) => bulkReview("extra", "rejected", event.currentTarget));
+    $("retryFailedExtraBtn").addEventListener("click", (event) => retryFailedReviews("extra", event.currentTarget));
     const today = new Date();
     $("tripDate").value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
     $("extraDayDate").value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
