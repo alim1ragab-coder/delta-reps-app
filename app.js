@@ -68,10 +68,10 @@
   const sessionToken = () => localStorage.getItem(CONFIG.sessionKey) || "";
   window.getActiveUserName = () => state.user?.name || "";
   const reviewLabel = (status) => ({
-    pending: "تحت المراجعة",
+    pending: "مؤكد في Google Sheets — تحت المراجعة",
     approved: "مقبول",
     rejected: "مرفوض",
-    "sync-pending": "معلّق—راجع السجل لاحقًا",
+    "sync-pending": "ظهر عند المندوب — بانتظار تأكيد الشيت",
     "sync-failed": "تعذر الإرسال—أعد المحاولة"
   }[status] || "تحت المراجعة");
 
@@ -329,7 +329,7 @@
         date: payload.date,
         place: payload.place,
         client: payload.client,
-        allowance: Number(state.allowance),
+        allowance: Number(payload.allowance ?? state.allowance),
         reason: payload.reason,
         proofData: payload.proofData || "",
         status: item.status === "failed" ? "sync-failed" : "sync-pending",
@@ -396,7 +396,13 @@
     if (action === "add_extra_day") item.localRecordId = `local_${requestId}`;
     if (!persistMutationQueue([...mutationQueue, item])) return false;
     renderAll();
-    showToast("تم حفظ الطلب؛ حالته معلّقة لحين تأكيده في Google Sheets.", "warning", 2500);
+    showToast(
+      action === "add_trip"
+        ? "ظهرت الرحلة عند المندوب مباشرة؛ بانتظار تأكيدها في Google Sheets."
+        : "تم حفظ الطلب؛ حالته معلّقة لحين تأكيده في Google Sheets.",
+      "warning",
+      3200
+    );
     if (navigator.onLine) syncMutationQueue().catch((error) => showToast(error.message || "تعذرت مزامنة الطلب المحفوظ.", "error", 7000));
     return true;
   }
