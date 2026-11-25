@@ -8,7 +8,7 @@
   <title>مشغلي الحركة | TAGADDOD</title>
   <link rel="icon" href="icon.png" type="image/png">
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="styles.css?v=mobile-wine-v7">
+  <link rel="stylesheet" href="styles.css?v=settlement-v9">
 </head>
 <body>
   <div id="appSplash" class="app-splash" role="dialog" aria-label="شاشة بدء التطبيق">
@@ -54,6 +54,7 @@
     <section id="authSection" class="panel auth-panel hidden">
       <div class="panel-head"><h2 id="authTitle">تسجيل الدخول</h2><button id="backToSamplesBtn" class="secondary" type="button">رجوع للتحليل</button></div>
       <p id="authHint" class="muted">أدخل رقم التليفون والرقم السري المسجل.</p>
+      <p id="loginProgressMessage" class="login-progress-message hidden" role="status" aria-live="polite">جاري تسجيل الدخول... من فضلك انتظر ولا تغلق الصفحة.</p>
       <form id="loginForm" class="form-grid one-column">
         <label>رقم التليفون
           <input id="loginPhoneInput" type="tel" inputmode="numeric" autocomplete="username" placeholder="01xxxxxxxxx" required>
@@ -103,6 +104,7 @@
         <button class="tab-btn" data-tab="newTripTab" type="button">تسجيل بدل السفر</button>
         <button class="tab-btn" data-tab="extraDayTab" type="button">تسجيل يوم عمل إضافي</button>
         <button class="tab-btn" data-tab="recordsTab" type="button">السجلات</button>
+        <button class="tab-btn" data-tab="settlementTab" type="button">تسوية العهدة</button>
         <button class="tab-btn admin-only hidden" data-tab="adminTab" type="button">إدارة النظام</button>
       </nav>
 
@@ -181,10 +183,6 @@
           <p class="muted lab-note-center">السماح للأحماض 3%، والسماح للمياه والرواسب معًا 2%. كل زيادة 1% تُحسب 10 كجم لكل طن.</p>
         </div>
 
-        <div class="panel lab-saved-panel">
-          <h2>التحاليل المحفوظة على هذا الجهاز</h2>
-          <div class="table-wrap"><table><thead><tr><th>العميل</th><th>الأحماض</th><th>المياه</th><th>الرواسب</th><th>خصم/طن</th><th>إجراء</th></tr></thead><tbody id="savedLabAnalysisBody"></tbody></table></div>
-        </div>
       </section>
 
       <section id="newTripTab" class="tab-panel">
@@ -219,6 +217,23 @@
       </section>
 
       <section id="recordsTab" class="tab-panel">
+        <div class="panel monthly-summary-panel admin-only hidden">
+          <div class="panel-head">
+            <h2>ملخص بدل السفر الشهري</h2>
+            <label>الشهر
+              <input id="summaryMonthInput" type="month">
+            </label>
+          </div>
+          <p id="monthlySummaryCaption" class="summary-text"></p>
+          <div class="table-wrap monthly-summary-wrap">
+            <table class="monthly-summary-table">
+              <thead><tr><th>المندوب</th><th>عدد أيام الرحلات</th><th>إجمالي بدل السفر</th></tr></thead>
+              <tbody id="monthlySummaryBody"></tbody>
+              <tfoot id="monthlySummaryFoot"></tfoot>
+            </table>
+          </div>
+        </div>
+
         <div class="panel">
           <div class="panel-head">
             <h2>سجل بدل السفر</h2>
@@ -231,15 +246,9 @@
             <button id="exportExcelBtn" class="secondary" type="button">تصدير Excel</button>
           </div>
           <p id="recordsSummary" class="summary-text">سجل الرحلات</p>
-          <div id="tripBulkReviewControls" class="bulk-review-actions admin-only hidden">
-            <strong id="tripPendingReviewCount"></strong>
-            <button id="approveAllTripsBtn" class="btn btn-success" type="button">قبول كل الرحلات المعلّقة</button>
-            <button id="rejectAllTripsBtn" class="btn btn-danger" type="button">رفض كل الرحلات المعلّقة</button>
-            <button id="retryFailedTripsBtn" class="btn btn-secondary hidden" type="button">إعادة إرسال القرارات المتعذرة</button>
-          </div>
-          <div class="table-wrap rep-landscape-wrap">
+          <div class="table-wrap trip-horizontal-wrap">
             <table>
-              <thead><tr><th>الطابع الزمني</th><th>التاريخ</th><th>المندوب</th><th>المكان</th><th>العميل</th><th id="tripAllowanceHeader">بدل السفر</th><th id="tripStatusHeader">الحالة</th><th>إجراء</th></tr></thead>
+              <thead><tr><th>الطابع الزمني</th><th>التاريخ</th><th>المندوب</th><th>المكان</th><th>العميل</th><th>بدل السفر</th><th>إجراء</th></tr></thead>
               <tbody id="recordsBody"></tbody>
             </table>
           </div>
@@ -282,6 +291,45 @@
         </div>
       </section>
 
+      <section id="settlementTab" class="tab-panel">
+        <div class="panel">
+          <h2>تسوية العهدة</h2>
+          <p class="muted">تُحفظ التسوية على الجهاز عند انقطاع الإنترنت، ثم تُزامَن مع Google Sheets تلقائيًا عند عودة الاتصال.</p>
+          <form id="settlementForm" class="form-grid">
+            <label>التاريخ<input id="settlementDate" type="date" required></label>
+            <label id="settlementRepLabel">اسم المندوب<select id="settlementRepSelect" required></select></label>
+            <label>المبلغ المستلم من الشركة اليوم (جنيه)<input id="settlementReceivedToday" type="number" min="0" step="0.01" value="0" inputmode="decimal"></label>
+            <label>المبلغ المتبقي من رحلات سابقة (جنيه)<input id="settlementPriorBalance" type="number" min="0" step="0.01" value="0" inputmode="decimal"></label>
+            <div class="settlement-expenses-field">
+              <div class="panel-head">
+                <h3>المبالغ المصروفة</h3>
+                <button id="addSettlementExpenseBtn" class="secondary" type="button">إضافة بند</button>
+              </div>
+              <div id="settlementExpenses" class="settlement-expenses"></div>
+            </div>
+            <div class="settlement-totals" aria-live="polite">
+              <div><span>إجمالي المبلغ معك</span><strong id="settlementTotalCash">0.00 جنيه</strong></div>
+              <div><span>إجمالي المصروف اليوم</span><strong id="settlementSpent">0.00 جنيه</strong></div>
+              <div><span>المتبقي معك</span><strong id="settlementRemaining">0.00 جنيه</strong></div>
+            </div>
+            <div class="actions-row settlement-actions">
+              <button id="saveSettlementBtn" class="primary" type="submit">حفظ التسوية</button>
+              <button id="shareSettlementBtn" class="secondary" type="button">مشاركة صورة التسوية</button>
+            </div>
+          </form>
+        </div>
+        <div class="panel">
+          <h2>التسويات المسجلة</h2>
+          <p id="settlementsSummary" class="summary-text">آخر 10 تسويات محفوظة في Google Sheets.</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>التاريخ</th><th>المندوب</th><th>إجمالي المبلغ</th><th>المصروف</th><th>المتبقي</th><th>الحالة</th></tr></thead>
+              <tbody id="settlementsBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
       <section id="adminTab" class="tab-panel">
         <div class="panel">
           <h2>بدل السفر الافتراضي</h2>
@@ -310,8 +358,8 @@
   </main>
 
   <footer>Designed &amp; Structured by ALI RAGAB - TAGADDOD</footer>
-  <script defer src="analysis.js?v=mobile-share-v10"></script>
-  <script defer src="app.js?v=mobile-wine-v7"></script>
+  <script defer src="analysis.js?v=share-only-v11"></script>
+  <script defer src="app.js?v=settlement-v9"></script>
   <script>
     (function () {
       const splash = document.getElementById("appSplash");

@@ -5,7 +5,7 @@
   const CONFIG = {
     appVersion: "1.0.0",
     updateCheckUrl: "https://raw.githubusercontent.com/aliragab-coder/delta-reps/main/version.json",
-    sheetUrl: "https://script.google.com/macros/s/AKfycbzwwQZ_YXc_tnoLaMC5-AR1oMEJ8PujCxXWBv5BKo5dnYorc1tVcMmw8AVwH7W90jbwaA/exec",
+    sheetUrl: "https://script.google.com/macros/s/AKfycbztDoTUw2zJshF0m46fSnsAH4z8DMunZS1liZktxCzdKgLp5uaF2m9X40L9desEYML_Ig/exec",
     xlsxUrl: "https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js",
     sessionKey: "delta_session_token_v5",
     cacheKey: "delta_state_cache_v5",
@@ -14,7 +14,7 @@
   };
 
   const $ = (id) => document.getElementById(id);
-  let state = { user: null, accounts: [], trips: [], extraDays: [], analyses: [], tripCount: 0, approvedTripCount: 0, pendingTripCount: 0, pendingTripIds: [], approvedAllowance: 0, extraCount: 0, pendingExtraCount: 0, pendingExtraIds: [], queueVersion: 0, allowance: 50 };
+  let state = { user: null, accounts: [], trips: [], extraDays: [], settlements: [], monthlySummary: [], summaryMonth: "", tripCount: 0, tripAllowanceTotal: 0, extraCount: 0, pendingExtraCount: 0, pendingExtraIds: [], queueVersion: 0, allowance: 50 };
   let currentPage = 1;
   let extraCurrentPage = 1;
   let loginBusy = false;
@@ -261,10 +261,21 @@
     try { localStorage.setItem(CONFIG.cacheKey, JSON.stringify(state)); } catch (_) {}
   }
 
+  function clearLegacySavedAnalyses() {
+    try {
+      localStorage.removeItem("delta_local_lab_analyses_v1");
+    } catch (error) {
+      showToast("تعذر إزالة التحاليل المحفوظة القديمة من هذا الجهاز.", "warning", 6000);
+    }
+  }
+
   function readCachedState() {
     try {
       const saved = JSON.parse(localStorage.getItem(CONFIG.cacheKey) || "null");
-      if (saved && typeof saved === "object") state = { ...state, ...saved };
+      if (saved && typeof saved === "object") {
+        delete saved.analyses;
+        state = { ...state, ...saved };
+      }
     } catch (_) {}
   }
 
@@ -272,6 +283,15 @@
     try {
       const saved = JSON.parse(localStorage.getItem(CONFIG.queueKey) || "[]");
       mutationQueue = Array.isArray(saved) ? saved : [];
+      const obsoleteTripReviews = mutationQueue.filter((item) =>
+        item.action === "review_records" && item.payload?.type === "trip"
+      );
+      if (obsoleteTripReviews.length) {
+        const remaining = mutationQueue.filter((item) => !obsoleteTripReviews.includes(item));
+        if (persistMutationQueue(remaining)) {
+          showToast("تم إلغاء قرارات مراجعة الرحلات القديمة؛ الرحلات لم تعد تحتاج موافقة.", "info", 6000);
+        }
+      }
     } catch (error) {
       mutationQueue = [];
       showToast("تعذر قراءة الطلبات المحفوظة على الجهاز. لا تمسح بيانات التطبيق قبل مراجعة السجل.", "error", 8000);
@@ -394,15 +414,15 @@
     };
     if (action === "add_trip") item.localRecordId = `local_${requestId}`;
     if (action === "add_extra_day") item.localRecordId = `local_${requestId}`;
+    if (action === "add_settlement") item.localRecordId = `local_${requestId}`;
     if (!persistMutationQueue([...mutationQueue, item])) return false;
     renderAll();
-    showToast(
-      action === "add_trip"
-        ? "ظهرت الرحلة عند المندوب مباشرة؛ بانتظار تأكيدها في Google Sheets."
-        : "تم حفظ الطلب؛ حالته معلّقة لحين تأكيده في Google Sheets.",
-      "warning",
-      3200
-    );
+    const queuedMessage = action === "add_trip"
+      ? "تم حفظ الرحلة على الجهاز؛ بانتظار مزامنتها مع Google Sheets."
+      : action === "add_settlement"
+        ? "تم حفظ التسوية على الجهاز؛ ستُزامَن مع Google Sheets عند عودة الإنترنت."
+        : "تم حفظ الطلب؛ حالته معلّقة لحين تأكيده في Google Sheets.";
+    showToast(queuedMessage, "warning", 3200);
     if (navigator.onLine) syncMutationQueue().catch((error) => showToast(error.message || "تعذرت مزامنة الطلب المحفوظ.", "error", 7000));
     return true;
   }
@@ -426,7 +446,7 @@
     const ownerPhone = normalizePhone(state.user.phone);
     const queued = mutationQueue.filter((item) => normalizePhone(item.userPhone) === ownerPhone && item.status === "queued");
     if (!queued.length) return false;
-    if (Number(state.queueVersion) !== 1) {
+    if (Number(state.queueVersion) !== 3) {
       showToast("الطلبات ما زالت محفوظة على الجهاز. حدّث Code.gs وانشر الإصدار الجديد قبل المزامنة الآمنة.", "error", 8000);
       return false;
     }
@@ -464,9 +484,11 @@
               skippedCount ? 7000 : 4200
             );
           } else if (item.action === "add_trip") {
-            showToast("تم تسجيل الرحلة في Google Sheets وهي الآن تحت مراجعة المشرف.", "success");
+            showToast("تم تسجيل الرحلة في Google Sheets.", "success");
           } else if (item.action === "add_extra_day") {
             showToast("تم تسجيل اليوم الإضافي في Google Sheets وهو الآن تحت مراجعة المشرف.", "success");
+          } else if (item.action === "add_settlement") {
+            showToast("تم حفظ تسوية العهدة في Google Sheets.", "success");
           }
         } catch (error) {
           const isTransient = !navigator.onLine ||
@@ -499,22 +521,12 @@
 
   function applyServerState(data) {
     if (!data || !data.user) throw new Error("استجابة غير مكتملة من الخادم.");
-    const hasReviewData = data.approvedAllowance != null &&
-      data.approvedTripCount != null &&
-      data.pendingTripCount != null &&
-      Array.isArray(data.trips) &&
-      data.trips.every((trip) => ["pending", "approved", "rejected"].includes(trip.status));
-    if (!hasReviewData) {
-      throw new Error("نسخة Google Apps Script المنشورة قديمة ولا تدعم مراجعة الرحلات. حدّث Code.gs وانشر إصدارًا جديدًا.");
+    if (Number(data.queueVersion) !== 3 || !Array.isArray(data.monthlySummary) || !Array.isArray(data.settlements)) {
+      throw new Error("نسخة Google Apps Script المنشورة قديمة ولا تدعم تسوية العهدة وملخص الشهر. حدّث Code.gs وانشر إصدارًا جديدًا.");
     }
-    const trips = (Array.isArray(data.trips) ? data.trips : []).map((trip) => ({
-      ...trip,
-      status: trip.status || "pending"
-    })).sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")) || String(b.id || "").localeCompare(String(a.id || "")));
-    const approvedTrips = trips.filter((trip) => trip.status === "approved");
-    const pendingTrips = trips.filter((trip) => trip.status === "pending");
+    const trips = (Array.isArray(data.trips) ? data.trips : [])
+      .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")) || String(b.id || "").localeCompare(String(a.id || "")));
     const totalTripCount = Number(data.tripCount == null ? trips.length : data.tripCount);
-    const hasAllTrips = trips.length >= totalTripCount;
     const extraDays = (Array.isArray(data.extraDays) ? data.extraDays : []).map((item) => ({
       ...item,
       status: item.status || "pending"
@@ -525,12 +537,11 @@
       accounts: Array.isArray(data.accounts) ? data.accounts : [],
       trips,
       extraDays,
-      analyses: Array.isArray(data.analyses) ? data.analyses : [],
+      settlements: Array.isArray(data.settlements) ? data.settlements : [],
+      monthlySummary: Array.isArray(data.monthlySummary) ? data.monthlySummary : [],
+      summaryMonth: String(data.summaryMonth || ""),
       tripCount: totalTripCount,
-      approvedTripCount: hasAllTrips || data.approvedTripCount == null ? approvedTrips.length : Number(data.approvedTripCount),
-      pendingTripCount: hasAllTrips || data.pendingTripCount == null ? pendingTrips.length : Number(data.pendingTripCount),
-      pendingTripIds: Array.isArray(data.pendingTripIds) ? data.pendingTripIds : [],
-      approvedAllowance: hasAllTrips || data.approvedAllowance == null ? approvedTrips.reduce((sum, trip) => sum + Number(trip.allowance || 0), 0) : Number(data.approvedAllowance),
+      tripAllowanceTotal: Number(data.tripAllowanceTotal || 0),
       extraCount: Number(data.extraCount == null ? extraDays.length : data.extraCount),
       pendingExtraCount: Number(data.pendingExtraCount == null ? pendingExtraDays.length : data.pendingExtraCount),
       pendingExtraIds: Array.isArray(data.pendingExtraIds) ? data.pendingExtraIds : [],
@@ -539,7 +550,6 @@
     };
     cacheState();
     renderAll();
-    if (typeof window.mergeServerAnalyses === "function") window.mergeServerAnalyses(data.analyses);
   }
 
   async function pullState(showMessage = false) {
@@ -551,7 +561,11 @@
       return false;
     }
     try {
-      const response = await apiPost("get_state", { tripPage: currentPage, extraPage: extraCurrentPage });
+      const response = await apiPost("get_state", {
+        tripPage: currentPage,
+        extraPage: extraCurrentPage,
+        summaryMonth: $("summaryMonthInput")?.value || ""
+      });
       if (!response?.ok) throw new Error(response?.error || "تعذر تحميل البيانات.");
       applyServerState(response.data);
       if (showMessage) setStatus("تم تحديث البيانات من Google Sheets.", "success");
@@ -616,39 +630,6 @@
     });
   }
 
-  window.syncAnalysisToServer = async function (analysis) {
-    if (!sessionToken()) {
-      showToast("سجل الدخول أولًا حتى يتسجل التحليل على Google Sheets.", "warning", 6000);
-      return null;
-    }
-    return queueServerMutation(async () => {
-      try {
-        const result = await apiPost("add_analysis", { analysis });
-        await pullState(false);
-        showToast("تم حفظ التحليل على Google Sheets.", "success");
-        return { id: result.analysisId };
-      } catch (error) {
-        showToast(error.message || "تعذر مزامنة التحليل.", "error", 6000);
-        return null;
-      }
-    });
-  };
-
-  window.deleteServerAnalysis = async function (id) {
-    if (!id) return true;
-    if (!sessionToken()) return true;
-    return queueServerMutation(async () => {
-      try {
-        await apiPost("delete_analysis", { id });
-        await pullState(false);
-        return true;
-      } catch (error) {
-        showToast(error.message || "تعذر حذف التحليل من Google Sheets.", "error", 6000);
-        return false;
-      }
-    });
-  };
-
   async function checkForAppUpdate(manual = false) {
     if (!CONFIG.updateCheckUrl) {
       if (manual) showToast("لم يتم تحديد رابط ملف التحديثات بعد.", "warning");
@@ -696,7 +677,7 @@
   }
 
   function switchTab(tabId) {
-    if (["newTripTab", "extraDayTab", "recordsTab", "adminTab"].includes(tabId) && !state.user) {
+    if (["newTripTab", "extraDayTab", "recordsTab", "settlementTab", "adminTab"].includes(tabId) && !state.user) {
       openLogin();
       return;
     }
@@ -717,7 +698,10 @@
       renderExtraDays();
       pullState(false);
     }
-    if (tabId === "analysisTab" && typeof renderSavedLabAnalyses === "function") renderSavedLabAnalyses();
+    if (tabId === "settlementTab") {
+      renderSettlements();
+      pullState(false);
+    }
   }
 
   function renderHeader() {
@@ -765,6 +749,14 @@
     if (extraSelect && state.user) {
       extraSelect.innerHTML = reps.map((account) => `<option value="${escapeHtml(account.phone)}">${escapeHtml(account.name)}${account.role === "admin" ? " (مشرف)" : ""}</option>`).join("");
       extraSelect.disabled = !isAdmin();
+    }
+    const settlementSelect = $("settlementRepSelect");
+    if (settlementSelect && state.user) {
+      const settlementReps = isAdmin() ? state.accounts.filter((account) => account.role === "rep") : [state.user];
+      settlementSelect.innerHTML = settlementReps
+        .map((account) => `<option value="${escapeHtml(account.phone)}">${escapeHtml(account.name)}</option>`)
+        .join("");
+      settlementSelect.disabled = !isAdmin();
     }
   }
 
@@ -843,16 +835,17 @@
 
   async function bulkReview(type, status, button) {
     if (!isAdmin()) return showToast("مراجعة السجلات متاحة للمشرف فقط.", "error");
-    const allIds = type === "trip" ? state.pendingTripIds : state.pendingExtraIds;
+    if (type !== "extra") return showToast("مراجعة بدل السفر ملغاة.", "error");
+    const allIds = state.pendingExtraIds;
     const ids = allIds.filter((id) => !queuedReview(type, id));
     if (!ids.length) {
-      if ((type === "trip" ? state.pendingTripCount : state.pendingExtraCount) > 0 && !allIds.length) {
+      if (state.pendingExtraCount > 0 && !allIds.length) {
         return showToast("حدّث نشر Code.gs في Apps Script لتفعيل المراجعة الجماعية.", "error", 7000);
       }
       return showToast("لا توجد سجلات معلّقة جديدة لإرسال القرار.", "warning");
     }
     if (ids.length > 5000) return showToast("الدفعة أكبر من الحد المسموح (5000 سجل). حدّث السجل ونفّذ المراجعة على دفعات أصغر.", "error", 7000);
-    const noun = type === "trip" ? "رحلة" : "يوم إضافي";
+    const noun = "يوم إضافي";
     const verb = status === "approved" ? "قبول" : "رفض";
     if (!confirm(`سيتم ${verb} ${ids.length} ${noun} معلّق دفعة واحدة. سيظل القرار معلّقًا حتى يؤكده Google Sheets. هل تريد المتابعة؟`)) return;
     await withButtonProgress(button, "جاري حفظ القرار...", () =>
@@ -873,21 +866,55 @@
     if (item.action !== "review_records" || !Array.isArray(result.updatedIds) || !result.updatedIds.length) return;
     const updatedIds = new Set(result.updatedIds.map(String));
     const status = item.payload.status;
-    if (item.payload.type === "trip") {
-      state.trips = state.trips.map((trip) => updatedIds.has(String(trip.id)) ? { ...trip, status } : trip);
-      state.pendingTripIds = state.pendingTripIds.filter((id) => !updatedIds.has(String(id)));
-      state.pendingTripCount = Math.max(0, state.pendingTripCount - updatedIds.size);
-      if (status === "approved") {
-        state.approvedTripCount += updatedIds.size;
-        state.approvedAllowance += Number(result.updatedAllowance || 0);
-      }
-    } else {
-      state.extraDays = state.extraDays.map((record) => updatedIds.has(String(record.id)) ? { ...record, status } : record);
-      state.pendingExtraIds = state.pendingExtraIds.filter((id) => !updatedIds.has(String(id)));
-      state.pendingExtraCount = Math.max(0, state.pendingExtraCount - updatedIds.size);
-    }
+    if (item.payload.type !== "extra") return;
+    state.extraDays = state.extraDays.map((record) => updatedIds.has(String(record.id)) ? { ...record, status } : record);
+    state.pendingExtraIds = state.pendingExtraIds.filter((id) => !updatedIds.has(String(id)));
+    state.pendingExtraCount = Math.max(0, state.pendingExtraCount - updatedIds.size);
     cacheState();
     renderAll();
+  }
+
+  function formatMoney(value) {
+    return `${Number(value || 0).toFixed(2)} جنيه`;
+  }
+
+  function renderMonthlySummary() {
+    const body = $("monthlySummaryBody");
+    const foot = $("monthlySummaryFoot");
+    if (!body || !foot) return;
+    if (!isAdmin()) {
+      body.innerHTML = "";
+      foot.innerHTML = "";
+      $("monthlySummaryCaption").textContent = "";
+      return;
+    }
+    const month = $("summaryMonthInput")?.value || state.summaryMonth;
+    const totals = new Map((state.monthlySummary || []).map((row) => [normalizePhone(row.repPhone), {
+      repPhone: normalizePhone(row.repPhone),
+      repName: row.repName || "",
+      days: Number(row.days || 0),
+      allowance: Number(row.allowance || 0)
+    }]));
+    const localTrips = queuedLocalRecords("add_trip").filter((trip) => !month || String(trip.date || "").slice(0, 7) === month);
+    localTrips.forEach((trip) => {
+      const phone = normalizePhone(trip.repPhone || trip.ownerPhone);
+      const row = totals.get(phone) || { repPhone: phone, repName: trip.repName || "", days: 0, allowance: 0 };
+      row.days += 1;
+      row.allowance += Number(trip.allowance || 0);
+      totals.set(phone, row);
+    });
+    const rows = [...totals.values()].sort((a, b) => a.repName.localeCompare(b.repName, "ar"));
+    body.innerHTML = rows.length
+      ? rows.map((row) => `<tr><td data-label="المندوب">${escapeHtml(row.repName)}</td><td data-label="عدد أيام الرحلات">${row.days}</td><td data-label="إجمالي بدل السفر">${escapeHtml(formatMoney(row.allowance))}</td></tr>`).join("")
+      : '<tr><td colspan="3">لا توجد رحلات مسجلة لهذا الشهر.</td></tr>';
+    const days = rows.reduce((sum, row) => sum + row.days, 0);
+    const allowance = rows.reduce((sum, row) => sum + row.allowance, 0);
+    foot.innerHTML = rows.length
+      ? `<tr><th>الإجمالي</th><th>${days}</th><th>${escapeHtml(formatMoney(allowance))}</th></tr>`
+      : "";
+    if ($("monthlySummaryCaption")) {
+      $("monthlySummaryCaption").textContent = `من أول يوم في ${month || "الشهر المحدد"} إلى آخر يوم فيه${localTrips.length ? ` · ${localTrips.length} رحلة بانتظار المزامنة` : ""}`;
+    }
   }
 
   function renderTrips() {
@@ -895,13 +922,10 @@
     if (!tbody) return;
     const rows = getVisibleTrips();
     const localTripCount = queuedLocalRecords("add_trip").length;
-    $("tripAllowanceHeader")?.classList.toggle("hidden", !isAdmin());
-    $("tripStatusHeader")?.classList.toggle("hidden", false);
     const pages = Math.max(1, Math.ceil((state.tripCount + localTripCount) / CONFIG.pageSize));
     currentPage = Math.min(Math.max(1, currentPage), pages);
-    const visible = rows;
     tbody.innerHTML = "";
-    visible.forEach((trip) => {
+    rows.forEach((trip) => {
       const tr = document.createElement("tr");
       const formattedTs = formatTimestamp(trip.timestamp);
       const tripCells = [
@@ -909,84 +933,297 @@
         { label: "التاريخ", value: trip.date || "" },
         { label: "المندوب", value: trip.repName || "" },
         { label: "المكان", value: trip.place || "" },
-        { label: "العميل", value: trip.client || "" }
+        { label: "العميل", value: trip.client || "" },
+        { label: "بدل السفر", value: `${Number(trip.allowance || 0).toFixed(2)} ج.م` }
       ];
-      if (isAdmin()) {
-        tripCells.push({ label: "بدل السفر", value: `${Number(trip.allowance || 0).toFixed(2)} ج.م` });
-      }
       tr.innerHTML = tripCells.map((cell) => `<td data-label="${cell.label}">${escapeHtml(cell.value)}</td>`).join("");
-      const statusCell = document.createElement("td");
-      statusCell.setAttribute("data-label", "الحالة");
-      const reviewQueueItem = !trip.isLocalQueue ? queuedReview("trip", trip.id) : null;
-      const tripStatus = displayedReviewStatus("trip", trip);
-      if (isAdmin() || tripStatus === "approved" || tripStatus === "rejected") {
-        statusCell.appendChild(createReviewStatus(tripStatus));
-        if (reviewQueueItem) appendQueueControls(statusCell, reviewQueueItem);
-      }
-      if (isAdmin() && trip.status === "pending" && !reviewQueueItem) {
-        const controls = document.createElement("div");
-        controls.className = "review-actions";
-        [["approved","قبول"],["rejected","رفض"]].forEach(([status,label]) => {
-          const button = document.createElement("button");
-          button.type = "button";
-          button.className = status === "approved" ? "btn btn-success btn-sm" : "btn btn-danger btn-sm";
-          button.textContent = label;
-          button.addEventListener("click", async () => {
-            if (button.dataset.actionPending === "true") return;
-            const prompt = status === "approved" ? "هل تريد قبول الرحلة واحتساب بدلها؟" : "هل تريد رفض الرحلة وعدم احتساب بدلها؟";
-            if (confirm(prompt)) {
-              await withButtonProgress(button, "جاري حفظ القرار...", () =>
-                enqueueMutation("review_records", {type:"trip",ids:[trip.id],status}));
-            }
-          });
-          controls.appendChild(button);
+      const cell = document.createElement("td");
+      cell.setAttribute("data-label", "إجراء");
+      if (trip.isLocalQueue) {
+        appendQueueControls(cell, queuedRecordFor("add_trip", trip.id));
+      } else {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "btn btn-danger btn-sm";
+        button.textContent = "حذف";
+        button.addEventListener("click", async () => {
+          if (button.dataset.actionPending === "true") return;
+          if (confirm("هل تريد حذف هذه الرحلة نهائيًا من Google Sheets؟")) {
+            await withButtonProgress(button, "جاري حذف الرحلة...", () =>
+              runMutation("delete_trip", { id: trip.id }, "تم حذف الرحلة بنجاح."));
+          }
         });
-        statusCell.appendChild(controls);
+        cell.appendChild(button);
       }
-      tr.appendChild(statusCell);
-      if (isAdmin() || normalizePhone(trip.ownerPhone) === normalizePhone(state.user?.phone)) {
-        const cell = document.createElement("td");
-        cell.setAttribute("data-label", "إجراء");
-        if (trip.isLocalQueue) {
-          appendQueueControls(cell, queuedRecordFor("add_trip", trip.id));
-        } else {
-          const button = document.createElement("button");
-          button.type = "button";
-          button.className = "btn btn-danger btn-sm";
-          button.textContent = "حذف";
-          button.disabled = Boolean(reviewQueueItem);
-          button.title = reviewQueueItem ? "ألغِ قرار المراجعة المعلّق أولًا" : "حذف الرحلة";
-          button.addEventListener("click", async () => {
-            if (button.dataset.actionPending === "true") return;
-            if (confirm("هل تريد حذف هذه الرحلة نهائيًا؟")) {
-              await withButtonProgress(button, "جاري حذف الرحلة...", () =>
-                runMutation("delete_trip", { id: trip.id }, "تم حذف الرحلة بنجاح."));
-            }
-          });
-          cell.appendChild(button);
-        }
-        tr.appendChild(cell);
-      }
+      tr.appendChild(cell);
       tbody.appendChild(tr);
     });
-    const rejectedCount = Math.max(0, state.tripCount - state.approvedTripCount - state.pendingTripCount);
-    const queuedReviewCount = state.pendingTripIds.filter((id) => queuedReview("trip", id)).length;
-    $("recordsSummary").textContent = `الرحلات: ${state.tripCount} | مقبولة: ${state.approvedTripCount} | تحت المراجعة: ${state.pendingTripCount} | مرفوضة: ${rejectedCount} | بدل الرحلات المقبولة: ${state.approvedAllowance.toFixed(2)} جنيه${localTripCount ? ` | محفوظة على الجهاز: ${localTripCount}` : ""}${queuedReviewCount ? ` | قرارات معلّقة للمزامنة: ${queuedReviewCount}` : ""}`;
-    $("tripBulkReviewControls")?.classList.toggle("hidden", !isAdmin() || !(state.pendingTripIds.length || state.pendingTripCount));
-    if ($("tripPendingReviewCount")) $("tripPendingReviewCount").textContent = `السجلات المعلّقة على الخادم: ${state.pendingTripIds.length || state.pendingTripCount}`;
-    $("retryFailedTripsBtn")?.classList.toggle("hidden", !currentUserQueue().some((item) => item.action === "review_records" && item.payload.type === "trip" && item.status === "failed"));
+    const localAllowance = queuedLocalRecords("add_trip").reduce((sum, trip) => sum + Number(trip.allowance || 0), 0);
+    $("recordsSummary").textContent = `إجمالي الرحلات: ${state.tripCount} | إجمالي بدل السفر: ${formatMoney(state.tripAllowanceTotal + localAllowance)}${localTripCount ? ` | بانتظار المزامنة: ${localTripCount}` : ""}`;
     $("tripsPageInfo").textContent = `صفحة ${currentPage} من ${pages}`;
     $("prevTripsPageBtn").disabled = currentPage <= 1;
     $("nextTripsPageBtn").disabled = currentPage >= pages;
     $("tripsPaginationBar").classList.toggle("hidden", pages <= 1);
   }
 
+  function renderSettlements() {
+    const body = $("settlementsBody");
+    if (!body) return;
+    const savedRows = (state.settlements || []).map((item) => ({ ...item, localQueueItem: null }));
+    const queuedRows = currentUserQueue()
+      .filter((item) => item.action === "add_settlement" && (item.status === "queued" || item.status === "failed"))
+      .map((item) => {
+        const payload = item.payload || {};
+        const repPhone = normalizePhone(payload.repPhone || item.userPhone);
+        const account = state.accounts.find((entry) => normalizePhone(entry.phone) === repPhone);
+        const receivedToday = Number(payload.receivedToday || 0);
+        const priorBalance = Number(payload.priorBalance || 0);
+        const expenses = Array.isArray(payload.expenses) ? payload.expenses : [];
+        const totalCash = receivedToday + priorBalance;
+        const spent = expenses.reduce((sum, expense) => sum + Number(expense.amount || 0) + Number(expense.gratuity || 0), 0);
+        return {
+          id: item.localRecordId,
+          date: payload.date,
+          repName: account?.name || (repPhone === normalizePhone(state.user?.phone) ? state.user?.name : ""),
+          totalCash,
+          spent,
+          remaining: totalCash - spent,
+          localQueueItem: item
+        };
+      });
+    const rows = [...queuedRows, ...savedRows].sort((a, b) =>
+      String(b.date || "").localeCompare(String(a.date || "")) ||
+      String(b.createdAt || "").localeCompare(String(a.createdAt || ""))
+    );
+    body.innerHTML = "";
+    rows.forEach((settlement) => {
+      const tr = document.createElement("tr");
+      const values = [
+        ["التاريخ", settlement.date || ""],
+        ["المندوب", settlement.repName || ""],
+        ["إجمالي المبلغ", formatMoney(settlement.totalCash)],
+        ["المصروف", formatMoney(settlement.spent)],
+        ["المتبقي", formatMoney(settlement.remaining)]
+      ];
+      tr.innerHTML = values.map(([label, value]) => `<td data-label="${label}">${escapeHtml(value)}</td>`).join("");
+      const statusCell = document.createElement("td");
+      statusCell.setAttribute("data-label", "الحالة");
+      if (settlement.localQueueItem) {
+        const status = document.createElement("span");
+        status.className = `review-status ${settlement.localQueueItem.status === "failed" ? "review-sync-failed" : "review-sync-pending"}`;
+        status.textContent = settlement.localQueueItem.status === "failed" ? "تعذرت المزامنة" : "بانتظار المزامنة";
+        statusCell.appendChild(status);
+        appendQueueControls(statusCell, settlement.localQueueItem);
+      } else {
+        statusCell.textContent = "محفوظة في Google Sheets";
+      }
+      tr.appendChild(statusCell);
+      body.appendChild(tr);
+    });
+    if (!rows.length) body.innerHTML = '<tr><td colspan="6">لا توجد تسويات مسجلة بعد.</td></tr>';
+    const pendingCount = queuedRows.length;
+    $("settlementsSummary").textContent = `آخر 10 تسويات محفوظة في Google Sheets${pendingCount ? ` · ${pendingCount} بانتظار المزامنة` : ""}`;
+  }
+
+  function addSettlementExpenseRow(name = "", amount = "", gratuity = "") {
+    const container = $("settlementExpenses");
+    if (!container) return;
+    const row = document.createElement("div");
+    row.className = "settlement-expense-row";
+    row.innerHTML = `
+      <label>البيان<input type="text" data-expense-name maxlength="150" value="${escapeHtml(name)}" placeholder="مثال: مصنع التونكايا"></label>
+      <label>المبلغ (جنيه)<input type="number" data-expense-amount min="0" step="0.01" value="${escapeHtml(amount)}" inputmode="decimal" placeholder="0.00"></label>
+      <label>الإكرامية (جنيه)<input type="number" data-expense-gratuity min="0" step="0.01" value="${escapeHtml(gratuity)}" inputmode="decimal" placeholder="0.00"></label>
+      <button class="btn btn-danger btn-sm" type="button" data-remove-expense aria-label="حذف البند">حذف البند</button>
+    `;
+    row.querySelector("[data-remove-expense]").addEventListener("click", () => {
+      row.remove();
+      updateSettlementTotals();
+    });
+    container.appendChild(row);
+  }
+
+  function updateSettlementTotals() {
+    const received = Number($("settlementReceivedToday")?.value || 0);
+    const prior = Number($("settlementPriorBalance")?.value || 0);
+    const spent = [...document.querySelectorAll(".settlement-expense-row")].reduce((sum, row) => {
+      const amount = Number(row.querySelector("[data-expense-amount]").value);
+      const gratuity = Number(row.querySelector("[data-expense-gratuity]").value || 0);
+      return Number.isFinite(amount) && amount >= 0 && Number.isFinite(gratuity) && gratuity >= 0 ? sum + amount + gratuity : sum;
+    }, 0);
+    const total = (Number.isFinite(received) && received >= 0 ? received : 0) +
+      (Number.isFinite(prior) && prior >= 0 ? prior : 0);
+    const remaining = total - spent;
+    $("settlementTotalCash").textContent = formatMoney(total);
+    $("settlementSpent").textContent = formatMoney(spent);
+    $("settlementRemaining").textContent = formatMoney(remaining);
+    $("settlementRemaining").classList.toggle("negative", remaining < 0);
+  }
+
+  function collectSettlementForm() {
+    const date = $("settlementDate").value;
+    const repPhone = isAdmin() ? $("settlementRepSelect").value : state.user?.phone;
+    const receivedToday = Number($("settlementReceivedToday").value || 0);
+    const priorBalance = Number($("settlementPriorBalance").value || 0);
+    if (!date) throw new Error("اختر تاريخ التسوية.");
+    if (!repPhone) throw new Error("اختر المندوب.");
+    if (!Number.isFinite(receivedToday) || receivedToday < 0 || !Number.isFinite(priorBalance) || priorBalance < 0) {
+      throw new Error("أدخل مبالغ صحيحة غير سالبة للمبلغ المستلم والرصيد السابق.");
+    }
+    const expenses = [];
+    for (const row of $("settlementExpenses").querySelectorAll(".settlement-expense-row")) {
+      const name = row.querySelector("[data-expense-name]").value.trim();
+      const amountText = row.querySelector("[data-expense-amount]").value.trim();
+      const gratuityText = row.querySelector("[data-expense-gratuity]").value.trim();
+      if (!name && !amountText && !gratuityText) continue;
+      const amount = Number(amountText);
+      const gratuity = Number(gratuityText || 0);
+      if (!name || !amountText || !Number.isFinite(amount) || amount < 0 || !Number.isFinite(gratuity) || gratuity < 0) {
+        throw new Error("أكمل البيان والمبلغ، وتأكد من صحة قيمة الإكرامية.");
+      }
+      expenses.push({ name, amount, gratuity });
+    }
+    if (expenses.length > 100) throw new Error("لا يمكن إضافة أكثر من 100 بند في التسوية.");
+    const account = state.accounts.find((item) => normalizePhone(item.phone) === normalizePhone(repPhone));
+    const repName = account?.name || state.user?.name || "";
+    return { date, repPhone, repName, receivedToday, priorBalance, expenses };
+  }
+
+  async function shareSettlementImage() {
+    const settlement = collectSettlementForm();
+    const totalCash = settlement.receivedToday + settlement.priorBalance;
+    const spent = settlement.expenses.reduce((sum, expense) => sum + expense.amount + expense.gratuity, 0);
+    const remaining = totalCash - spent;
+    const width = 1200;
+    const left = 75;
+    const right = width - 75;
+    const tableWidth = right - left;
+    const rowHeights = settlement.expenses.map((expense) => expense.gratuity > 0 ? 110 : 76);
+    const tableHeight = 58 + rowHeights.reduce((sum, rowHeight) => sum + rowHeight, 0);
+    const height = 660 + tableHeight;
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("تعذر تجهيز صورة التسوية.");
+    context.fillStyle = "#e5e7eb";
+    context.fillRect(0, 0, width, height);
+    context.fillStyle = "#ffffff";
+    context.fillRect(24, 24, width - 48, height - 48);
+    context.direction = "rtl";
+    context.textAlign = "center";
+    context.fillStyle = "#881337";
+    context.font = "800 54px 'Segoe UI', Tahoma, sans-serif";
+    context.fillText("تسوية العهدة", width / 2, 105);
+    context.fillStyle = "#1f2937";
+    context.font = "700 30px 'Segoe UI', Tahoma, sans-serif";
+    context.fillText(`المندوب: ${settlement.repName}  |  التاريخ: ${settlement.date}`, width / 2, 165);
+    context.fillStyle = "#f3f4f6";
+    context.fillRect(70, 205, width - 140, 120);
+    context.font = "700 25px 'Segoe UI', Tahoma, sans-serif";
+    context.fillStyle = "#374151";
+    context.textAlign = "right";
+    context.fillText(`المبلغ المستلم اليوم: ${formatMoney(settlement.receivedToday)}`, width - 100, 252);
+    context.fillText(`الرصيد المتبقي من رحلات سابقة: ${formatMoney(settlement.priorBalance)}`, width - 100, 296);
+    const tableTop = 365;
+    const headerHeight = 58;
+    const numberDivider = right - 90;
+    const amountDivider = left + 240;
+    let top = tableTop;
+    context.fillStyle = "#d1d5db";
+    context.fillRect(left, top, tableWidth, headerHeight);
+    context.strokeStyle = "#6b7280";
+    context.lineWidth = 2;
+    context.strokeRect(left, top, tableWidth, headerHeight);
+    context.textAlign = "right";
+    context.fillStyle = "#1f2937";
+    context.font = "800 28px 'Segoe UI', Tahoma, sans-serif";
+    context.fillText("م", right - 28, top + 38);
+    context.fillText("البيان", numberDivider - 24, top + 38);
+    context.textAlign = "left";
+    context.fillText("المبلغ", left + 20, top + 38);
+    context.beginPath();
+    context.moveTo(numberDivider, top);
+    context.lineTo(numberDivider, top + headerHeight);
+    context.moveTo(amountDivider, top);
+    context.lineTo(amountDivider, top + headerHeight);
+    context.stroke();
+    top += headerHeight;
+    settlement.expenses.forEach((expense, index) => {
+      const rowHeight = rowHeights[index];
+      context.fillStyle = index % 2 === 0 ? "#ffffff" : "#f3f4f6";
+      context.fillRect(left, top, tableWidth, rowHeight);
+      context.strokeStyle = "#9ca3af";
+      context.lineWidth = 1.5;
+      context.strokeRect(left, top, tableWidth, rowHeight);
+      context.beginPath();
+      context.moveTo(numberDivider, top);
+      context.lineTo(numberDivider, top + rowHeight);
+      context.moveTo(amountDivider, top);
+      context.lineTo(amountDivider, top + rowHeight);
+      context.stroke();
+      context.textAlign = "right";
+      context.fillStyle = "#111827";
+      context.font = "700 25px 'Segoe UI', Tahoma, sans-serif";
+      context.fillText(String(index + 1), right - 28, top + 39);
+      context.fillText(expense.name, numberDivider - 24, top + 39);
+      context.textAlign = "left";
+      context.fillText(formatMoney(expense.amount), left + 20, top + 39);
+      if (expense.gratuity > 0) {
+        context.textAlign = "right";
+        context.fillStyle = "#6b7280";
+        context.font = "600 20px 'Segoe UI', Tahoma, sans-serif";
+        context.fillText(`إكرامية ${expense.name}`, numberDivider - 24, top + 82);
+        context.textAlign = "left";
+        context.fillText(formatMoney(expense.gratuity), left + 20, top + 82);
+      }
+      top += rowHeight;
+    });
+    top += 38;
+    context.fillStyle = "#f3f4f6";
+    context.fillRect(70, top, width - 140, 200);
+    context.textAlign = "right";
+    context.fillStyle = "#374151";
+    context.font = "700 27px 'Segoe UI', Tahoma, sans-serif";
+    context.fillText(`إجمالي المبلغ معك: ${formatMoney(totalCash)}`, width - 105, top + 43);
+    context.fillText(`إجمالي المصروف اليوم: ${formatMoney(spent)}`, width - 105, top + 96);
+    context.fillStyle = remaining < 0 ? "#b91c1c" : "#166534";
+    context.font = "800 34px 'Segoe UI', Tahoma, sans-serif";
+    context.fillText(`المتبقي معك: ${formatMoney(remaining)}`, width - 105, top + 153);
+    context.direction = "ltr";
+    context.textAlign = "center";
+    context.fillStyle = "#6b7280";
+    context.font = "700 20px 'Segoe UI', Tahoma, sans-serif";
+    context.fillText("Structured by ALI M. RAGAB  •  TAGADDOD", width / 2, height - 38);
+    const dataUrl = canvas.toDataURL("image/png");
+    const blob = await new Promise((resolve, reject) => canvas.toBlob((result) =>
+      result ? resolve(result) : reject(new Error("تعذر إنشاء ملف صورة للتسوية.")), "image/png"));
+    const file = new File([blob], `تسوية_العهدة_${settlement.date}.png`, { type: "image/png" });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: "تسوية العهدة" });
+        showToast("تمت مشاركة صورة التسوية.", "success");
+        return;
+      } catch (error) {
+        if (error.name === "AbortError") return;
+        throw error;
+      }
+    }
+    const link = document.createElement("a");
+    link.href = dataUrl;
+    link.download = file.name;
+    link.click();
+    showToast("تم حفظ صورة التسوية على الجهاز.", "success");
+  }
+
   function renderAll() {
     renderHeader();
     renderRepSelect();
     renderReps();
+    renderMonthlySummary();
     renderTrips();
     renderExtraDays();
+    renderSettlements();
     if ($("tripAllowance")) {
       $("tripAllowance").value = Number(state.allowance).toFixed(2);
       $("tripAllowance").readOnly = true;
@@ -1014,7 +1251,31 @@
         ? "اكتب أي رقم سري للمتابعة، وبعدها أنشئ رقمك السري الخاص."
         : "أدخل رقم التليفون والرقم السري المسجل.";
     $("loginPasswordInput").placeholder = accountNeedsSetup && !firstLoginMode ? "اكتب أي رقم للمتابعة" : "الرقم السري";
-    $("phoneAuthBtn").textContent = firstLoginMode ? "حفظ الرقم السري والدخول" : accountNeedsSetup ? "متابعة" : "تسجيل الدخول";
+    $("phoneAuthBtn").textContent = loginBusy
+      ? "جاري تسجيل الدخول..."
+      : firstLoginMode
+        ? "حفظ الرقم السري والدخول"
+        : accountNeedsSetup
+          ? "متابعة"
+          : "تسجيل الدخول";
+  }
+
+  function setLoginLoading(isLoading) {
+    const section = $("authSection");
+    const loginButton = $("phoneAuthBtn");
+    section?.classList.toggle("login-in-progress", isLoading);
+    section?.setAttribute("aria-busy", String(isLoading));
+    $("loginProgressMessage")?.classList.toggle("hidden", !isLoading);
+    loginButton?.classList.toggle("login-loading", isLoading);
+    section?.querySelectorAll("input, button, select").forEach((control) => {
+      if (isLoading) {
+        control.dataset.loginPreviousDisabled = String(control.disabled);
+        control.disabled = true;
+      } else if (control.dataset.loginPreviousDisabled != null) {
+        control.disabled = control.dataset.loginPreviousDisabled === "true";
+        delete control.dataset.loginPreviousDisabled;
+      }
+    });
   }
 
   async function login() {
@@ -1033,11 +1294,8 @@
       return showToast("الرقم السري يجب أن يتكون من 4 أرقام على الأقل، ويجب أن يتطابق مع التأكيد.", "warning", 6000);
     }
     loginBusy = true;
-    const loginButton = $("phoneAuthBtn");
     const finishProgress = beginActionProgress("جاري تسجيل الدخول...");
-    loginButton.disabled = true;
-    loginButton.setAttribute("aria-busy", "true");
-    loginButton.textContent = "جاري تسجيل الدخول...";
+    setLoginLoading(true);
     try {
       const result = await apiPost("login", { phone, password: firstLoginMode ? "" : password, newPassword: firstLoginMode ? newPassword : "" });
       localStorage.setItem(CONFIG.sessionKey, result.sessionToken);
@@ -1066,8 +1324,7 @@
     } finally {
       finishProgress();
       loginBusy = false;
-      loginButton.disabled = false;
-      loginButton.removeAttribute("aria-busy");
+      setLoginLoading(false);
       syncAuthFields();
     }
   }
@@ -1264,31 +1521,30 @@
       const listResult = await apiPost("list_trips", { from, to });
       if (!listResult?.ok) throw new Error(listResult?.error || "تعذر تحميل الرحلات للتصدير.");
       const rows = Array.isArray(listResult.trips) ? listResult.trips : [];
-      const approvedRows = rows.filter((trip) => trip.status === "approved");
       const repNames = [...new Set(rows.map((trip) => trip.repName).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ar"));
-      const totalAllowance = approvedRows.reduce((sum, trip) => sum + Number(trip.allowance || 0), 0);
+      const totalAllowance = rows.reduce((sum, trip) => sum + Number(trip.allowance || 0), 0);
       const aoa = [
-        ["تقرير رحلات مشغلي الحركة - TAGADDOD", "", "", "", "", "", ""],
-        ["الطابع الزمني", "تاريخ الرحلة", "اسم المندوب", "المكان / المحافظة", "اسم العميل", "بدل السفر (ج.م)", "الحالة"],
-        ...rows.map((trip) => [formatTimestamp(trip.timestamp), trip.date || "", trip.repName || "", trip.place || "", trip.client || "", Number(trip.allowance || 0), reviewLabel(trip.status)])
+        ["تقرير رحلات مشغلي الحركة - TAGADDOD", "", "", "", "", ""],
+        ["الطابع الزمني", "تاريخ الرحلة", "اسم المندوب", "المكان / المحافظة", "اسم العميل", "بدل السفر (ج.م)"],
+        ...rows.map((trip) => [formatTimestamp(trip.timestamp), trip.date || "", trip.repName || "", trip.place || "", trip.client || "", Number(trip.allowance || 0)])
       ];
       const summaryTitleRow = aoa.length + 2;
-      aoa.push([], ["ملخص بدل السفر للرحلات المقبولة فقط", "", ""]);
+      aoa.push([], ["ملخص بدل السفر لكل الرحلات", "", ""]);
       const summaryHeaderRow = aoa.length + 1;
       aoa.push(["اسم المندوب", "عدد الرحلات", "إجمالي بدل السفر (ج.م)"]);
       repNames.forEach((name) => {
-        const own = approvedRows.filter((trip) => trip.repName === name);
+        const own = rows.filter((trip) => trip.repName === name);
         aoa.push([name, own.length, own.reduce((sum, trip) => sum + Number(trip.allowance || 0), 0)]);
       });
       const grandTotalRow = aoa.length + 1;
-      aoa.push(["الإجمالي العام (المقبول فقط)", approvedRows.length, totalAllowance]);
+      aoa.push(["الإجمالي العام", rows.length, totalAllowance]);
 
       const ws = XLSX.utils.aoa_to_sheet(aoa);
       ws["!views"] = [{ RTL: true }];
-      ws["!cols"] = [{ wch: 24 }, { wch: 15 }, { wch: 23 }, { wch: 23 }, { wch: 27 }, { wch: 19 }, { wch: 18 }];
+      ws["!cols"] = [{ wch: 24 }, { wch: 15 }, { wch: 23 }, { wch: 23 }, { wch: 27 }, { wch: 19 }];
       ws["!rows"] = aoa.map((_, index) => ({ hpt: index === 0 || index + 1 === summaryTitleRow || index + 1 === summaryHeaderRow ? 26 : 22 }));
       ws["!merges"] = [
-        { s: { r: 0, c: 0 }, e: { r: 0, c: 6 } },
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 5 } },
         { s: { r: summaryTitleRow - 1, c: 0 }, e: { r: summaryTitleRow - 1, c: 2 } }
       ];
 
@@ -1306,10 +1562,10 @@
       const headerStyle = { font: { name: "Arial", sz: 11, bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "1F2937" } } };
       const totalStyle = { font: { name: "Arial", sz: 11, bold: true, color: { rgb: "991B1B" } }, fill: { fgColor: { rgb: "FEE2E2" } } };
       const bodyStyle = { font: { name: "Arial", sz: 10, color: { rgb: "111827" } }, fill: { fgColor: { rgb: "FFFFFF" } } };
-      for (let c = 0; c < 7; c += 1) setStyle(0, c, titleStyle);
-      for (let c = 0; c < 7; c += 1) setStyle(1, c, headerStyle);
+      for (let c = 0; c < 6; c += 1) setStyle(0, c, titleStyle);
+      for (let c = 0; c < 6; c += 1) setStyle(1, c, headerStyle);
       for (let r = 2; r < rows.length + 2; r += 1) {
-        for (let c = 0; c < 7; c += 1) {
+        for (let c = 0; c < 6; c += 1) {
           const style = { ...bodyStyle, fill: { fgColor: { rgb: r % 2 === 0 ? "F3F4F6" : "FFFFFF" } } };
           if (c === 5) style.numFmt = "#,##0.00";
           setStyle(r, c, style);
@@ -1330,11 +1586,11 @@
         if (c === 2) style.numFmt = "#,##0.00";
         setStyle(grandTotalRow - 1, c, style);
       }
-      ws["!autofilter"] = { ref: `A2:G${Math.max(2, rows.length + 2)}` };
+      ws["!autofilter"] = { ref: `A2:F${Math.max(2, rows.length + 2)}` };
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "تقرير الرحلات");
       XLSX.writeFile(wb, `تقرير_رحلات_المناديب_${from}_${to}.xlsx`);
-      showToast(`تم تصدير ${rows.length} رحلة؛ إجمالي البدل محسوب للرحلات المقبولة فقط.`, "success");
+      showToast(`تم تصدير ${rows.length} رحلة وإجمالي بدل السفر لكل الرحلات.`, "success");
     } catch (error) {
       showToast(`تعذر تصدير الملف: ${error.message || "خطأ غير معروف"}`, "error", 6000);
     }
@@ -1434,6 +1690,30 @@
         }
       });
     });
+    $("settlementForm").addEventListener("submit", (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      withButtonProgress($("saveSettlementBtn") || form.querySelector('button[type="submit"]'), "جاري حفظ التسوية...", async () => {
+        if (!state.user) return openLogin();
+        try {
+          const settlement = collectSettlementForm();
+          const ok = await enqueueMutation("add_settlement", settlement);
+          if (ok) {
+            $("settlementReceivedToday").value = "0";
+            $("settlementPriorBalance").value = "0";
+            $("settlementExpenses").innerHTML = "";
+            addSettlementExpenseRow();
+            updateSettlementTotals();
+            renderSettlements();
+          }
+        } catch (error) {
+          showToast(error.message || "راجع بيانات التسوية.", "warning", 6000);
+        }
+      });
+    });
+    $("settlementForm").addEventListener("input", updateSettlementTotals);
+    $("addSettlementExpenseBtn").addEventListener("click", () => addSettlementExpenseRow());
+    bindProgressClick($("shareSettlementBtn"), "جاري تجهيز صورة التسوية...", shareSettlementImage);
     $("addRepForm").addEventListener("submit", (event) => {
       event.preventDefault();
       if (!isAdmin()) return alert("غير مصرح.");
@@ -1458,9 +1738,6 @@
     bindProgressClick($("nextTripsPageBtn"), "جاري تحديث الرحلات...", async () => { currentPage += 1; await pullState(true); });
     bindProgressClick($("exportExcelBtn"), "جاري تجهيز ملف Excel...", exportExcel);
     bindProgressClick($("syncNowBtn"), "جاري تحديث البيانات...", async () => { await pullState(true); await syncMutationQueue(); });
-    $("approveAllTripsBtn").addEventListener("click", (event) => bulkReview("trip", "approved", event.currentTarget));
-    $("rejectAllTripsBtn").addEventListener("click", (event) => bulkReview("trip", "rejected", event.currentTarget));
-    $("retryFailedTripsBtn").addEventListener("click", (event) => retryFailedReviews("trip", event.currentTarget));
     ["extraFromDate","extraToDate"].forEach((id) => $(id).addEventListener("change", () => { extraCurrentPage = 1; renderExtraDays(); }));
     $("extraSearchInput").addEventListener("input", () => { extraCurrentPage = 1; renderExtraDays(); });
     bindProgressClick($("prevExtraPageBtn"), "جاري تحديث الأيام الإضافية...", async () => { extraCurrentPage -= 1; await pullState(true); });
@@ -1471,8 +1748,16 @@
     $("rejectAllExtraBtn").addEventListener("click", (event) => bulkReview("extra", "rejected", event.currentTarget));
     $("retryFailedExtraBtn").addEventListener("click", (event) => retryFailedReviews("extra", event.currentTarget));
     const today = new Date();
-    $("tripDate").value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-    $("extraDayDate").value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    const todayDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    $("tripDate").value = todayDate;
+    $("extraDayDate").value = todayDate;
+    $("settlementDate").value = todayDate;
+    $("summaryMonthInput").value = todayDate.slice(0, 7);
+    addSettlementExpenseRow();
+    $("summaryMonthInput").addEventListener("change", async () => {
+      renderMonthlySummary();
+      await pullState(false);
+    });
     window.addEventListener("online", async () => {
       setConnectionBadge();
       await pullState(true);
@@ -1480,12 +1765,13 @@
     });
     window.addEventListener("offline", () => {
       setConnectionBadge();
-      showToast("الاتصال انقطع. الطلبات الجديدة ستُحفظ على الجهاز وتظل معلّقة حتى عودة الاتصال وتأكيد Google Sheets.", "warning", 7000);
+      showToast("الاتصال انقطع. الرحلات والتسويات الجديدة ستُحفظ على الجهاز وتُزامَن عند عودة الإنترنت.", "warning", 7000);
     });
     window.setInterval(() => { if (navigator.onLine) syncMutationQueue(); }, 15000);
   }
 
   function init() {
+    clearLegacySavedAnalyses();
     readCachedState();
     readMutationQueue();
     bindEvents();

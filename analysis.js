@@ -1,10 +1,8 @@
-/* TAGADDOD Delta Reps - local oil sample analysis, storage & share image */
+/* TAGADDOD Delta Reps - local oil sample analysis & share image */
 (() => {
   "use strict";
 
-  const STORAGE_KEY = "delta_local_lab_analyses_v1";
   const $ = (id) => document.getElementById(id);
-  const deletingAnalysisIds = new Set();
   let hasCalculated = false;
 
   async function withAnalysisButtonProgress(button, loadingMessage, action) {
@@ -90,134 +88,6 @@
     hasCalculated = false;
     updateDisplay();
     window.showAppToast?.("تم تفريغ حقول التحليل.", "success");
-  }
-
-  function readSaved() {
-    try {
-      const list = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-      return Array.isArray(list) ? list : [];
-    } catch (_) {
-      return [];
-    }
-  }
-
-  function writeSaved(list) {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(list.slice(0, 100)));
-    } catch (_) {}
-  }
-
-  function escapeHtml(value) {
-    return String(value ?? "").replace(/[&<>"']/g, (ch) => ({
-      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
-    }[ch]));
-  }
-
-  function renderSavedLabAnalyses() {
-    const tbody = $("savedLabAnalysisBody");
-    if (!tbody) return;
-    const items = readSaved();
-    if (!items.length) {
-      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;">لا توجد تحاليل محفوظة على هذا الجهاز حتى الآن.</td></tr>`;
-      return;
-    }
-    tbody.innerHTML = items.map((item, idx) => {
-      const isDeleting = deletingAnalysisIds.has(item.id || `local:${idx}`);
-      return `
-        <tr>
-          <td data-label="العميل">${escapeHtml(item.clientName)}</td>
-          <td data-label="الأحماض">${Number(item.acidPct || 0).toFixed(2)}%</td>
-          <td data-label="المياه">${Number(item.waterPct || 0).toFixed(2)}%</td>
-          <td data-label="الرواسب">${Number(item.sedimentPct || 0).toFixed(2)}%</td>
-          <td data-label="خصم/طن">${Number(item.deductionPerTon || 0)} كجم</td>
-          <td data-label="إجراء">
-            <button type="button" class="btn btn-danger btn-sm del-lab-btn" data-index="${idx}" ${isDeleting ? 'disabled aria-busy="true"' : ""}>${isDeleting ? "جاري الحذف..." : "حذف"}</button>
-          </td>
-        </tr>
-      `;
-    }).join("");
-
-    tbody.querySelectorAll(".del-lab-btn").forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        const idx = Number(btn.dataset.index);
-        const list = readSaved();
-        const item = list[idx];
-        if (!item) return;
-        const deletionKey = item.id || `local:${idx}`;
-        if (deletingAnalysisIds.has(deletionKey)) return;
-        deletingAnalysisIds.add(deletionKey);
-        const finishProgress = window.beginAppActionProgress?.("جاري حذف التحليل...") || (() => {});
-        btn.disabled = true;
-        btn.setAttribute("aria-busy", "true");
-        btn.textContent = "جاري الحذف...";
-        let deleted = false;
-        try {
-          if (item.id && typeof window.deleteServerAnalysis === "function") {
-            if (!await window.deleteServerAnalysis(item.id)) return;
-          }
-          const current = readSaved();
-          const remaining = item.id
-            ? current.filter((entry) => entry.id !== item.id)
-            : current.filter((_, currentIndex) => currentIndex !== idx);
-          writeSaved(remaining);
-          renderSavedLabAnalyses();
-          deleted = true;
-          window.showAppToast?.("تم حذف التحليل المحفوظ.", "success");
-        } finally {
-          finishProgress();
-          deletingAnalysisIds.delete(deletionKey);
-          if (!deleted && btn.isConnected) {
-            btn.disabled = false;
-            btn.removeAttribute("aria-busy");
-            btn.textContent = "حذف";
-          }
-        }
-      });
-    });
-  }
-  window.renderSavedLabAnalyses = renderSavedLabAnalyses;
-
-  window.mergeServerAnalyses = function (items) {
-    if (!Array.isArray(items)) return;
-    const local = readSaved();
-    const withoutLegacyDuplicates = local.filter((item) => item.id);
-    const server = items.map((item) => ({
-      id: item.id,
-      clientName: item.clientName,
-      emptyWeight: item.emptyWeight,
-      beforeBoil: item.beforeBoil,
-      afterBoil: item.afterBoil,
-      sedimentWeight: item.sedimentWeight,
-      waterPct: item.waterPct,
-      sedimentPct: item.sedimentPct,
-      acidPct: item.acidPct,
-      deductionPerTon: item.deductionPerTon,
-      savedAt: item.createdAt
-    }));
-    writeSaved([...server, ...withoutLegacyDuplicates.filter((item) => !server.some((entry) => entry.id === item.id))].slice(0, 100));
-    renderSavedLabAnalyses();
-  };
-
-  async function saveCurrentAnalysis() {
-    const res = computeAnalysis();
-    const list = readSaved();
-    const item = {
-      ...res,
-      savedAt: new Date().toISOString()
-    };
-    list.unshift(item);
-    writeSaved(list);
-    renderSavedLabAnalyses();
-    if (navigator.onLine && typeof window.syncAnalysisToServer === "function") {
-      const saved = await window.syncAnalysisToServer(item);
-      if (saved) {
-        item.id = saved.id;
-        writeSaved([item, ...readSaved().filter((entry, index) => index !== 0)]);
-        renderSavedLabAnalyses();
-      }
-    } else {
-      window.showAppToast?.("تم حفظ التحليل على الجهاز. سجل دخولك وسجّله على Google Sheets.", "warning");
-    }
   }
 
   function drawRoundedRect(ctx, x, y, w, h, r) {
@@ -448,6 +318,5 @@
     });
     $("clearLabFormBtn")?.addEventListener("click", clearLabInputs);
     updateDisplay();
-    renderSavedLabAnalyses();
   });
 })();

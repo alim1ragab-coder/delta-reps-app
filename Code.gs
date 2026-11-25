@@ -11,14 +11,14 @@ const CONFIG = {
   ACCOUNTS_SHEET: 'Accounts',
   TRIPS_SHEET: 'Trips',
   EXTRA_DAYS_SHEET: 'ExtraDays',
-  ANALYSES_SHEET: 'Analyses',
+  SETTLEMENTS_SHEET: 'Settlements',
   SETTINGS_SHEET: 'Settings'
 };
 
 const ACCOUNT_HEADERS = ['id','name','phone','role','passwordSalt','passwordHash','avatar','createdAt'];
 const TRIP_HEADERS = ['id','ownerPhone','repName','timestamp','date','place','client','allowance','createdAt','status','reviewedBy','reviewedAt'];
 const EXTRA_HEADERS = ['id','ownerPhone','repName','timestamp','date','reason','proofUrl','createdAt','status','reviewedBy','reviewedAt'];
-const ANALYSIS_HEADERS = ['id','ownerPhone','repName','timestamp','clientName','emptyWeight','beforeBoil','afterBoil','sedimentWeight','waterPct','sedimentPct','acidPct','deductionPerTon','createdAt'];
+const SETTLEMENT_HEADERS = ['id','ownerPhone','repName','date','receivedToday','priorBalance','totalCash','expensesJson','spent','remaining','createdAt'];
 const SETTING_HEADERS = ['key','value'];
 
 function doGet(e) {
@@ -86,19 +86,18 @@ function handleAction_(request) {
     if (to) extra = extra.filter(t => t.date <= to);
     return {ok:true,extraDays:extra};
   }
-  if (action === 'review_trip' || action === 'review_extra_day') {
+  if (action === 'review_extra_day') {
     requireAdmin_(admin);
-    const type = action === 'review_trip' ? 'trip' : 'extra';
     const status = String(payload.status || '');
     if (status !== 'approved' && status !== 'rejected') throw new Error('حالة المراجعة غير صحيحة.');
-    reviewRecord_(type,payload.id,status,actor);
+    reviewRecord_('extra',payload.id,status,actor);
     return {ok:true};
   }
   if (action === 'review_records') {
     requireAdmin_(admin);
     const type = String(payload.type || '');
     const status = String(payload.status || '');
-    if (type !== 'trip' && type !== 'extra') throw new Error('نوع السجلات غير صحيح.');
+    if (type !== 'extra') throw new Error('مراجعة الرحلات ملغاة؛ يمكن حذف الرحلة بدلًا من ذلك.');
     if (status !== 'approved' && status !== 'rejected') throw new Error('حالة المراجعة غير صحيحة.');
     const ids = Array.isArray(payload.ids) ? payload.ids : [];
     if (!ids.length || ids.length > 5000) throw new Error('حدد سجلات للمراجعة (بحد أقصى 5000 سجل في الطلب الواحد).');
@@ -119,7 +118,7 @@ function handleAction_(request) {
       const existingTrip = trips.find(t => t.id === tripId);
       if (existingTrip) return {ok:true,tripId:existingTrip.id,duplicateRequest:true};
       if (trips.some(t => normalizePhone_(t.ownerPhone) === owner.phone && t.date === date)) throw new Error('تم تسجيل رحلة لهذا المندوب في هذا التاريخ بالفعل.');
-      const trip = {id:tripId,ownerPhone:owner.phone,repName:owner.name,timestamp:Utilities.formatDate(new Date(),Session.getScriptTimeZone(),'yyyy-MM-dd HH:mm:ss'),date,place,client,allowance,createdAt:new Date().toISOString(),status:'pending',reviewedBy:'',reviewedAt:''};
+      const trip = {id:tripId,ownerPhone:owner.phone,repName:owner.name,timestamp:Utilities.formatDate(new Date(),Session.getScriptTimeZone(),'yyyy-MM-dd HH:mm:ss'),date,place,client,allowance,createdAt:new Date().toISOString(),status:'approved',reviewedBy:'',reviewedAt:''};
       getSheet_(CONFIG.TRIPS_SHEET,TRIP_HEADERS).appendRow(TRIP_HEADERS.map(k => trip[k] === undefined ? '' : trip[k]));
       return {ok:true,tripId:trip.id};
     }
@@ -131,6 +130,47 @@ function handleAction_(request) {
       if (!admin && normalizePhone_(rows[index][1]) !== actor.phone) throw new Error('لا يمكنك حذف رحلة مندوب آخر.');
       sh.deleteRow(index + 1);
       return {ok:true};
+    }
+    case 'add_settlement': {
+      const owner = admin ? findAccountByPhone_(payload.repPhone) : actor;
+      if (!owner) throw new Error('المندوب المحدد غير موجود.');
+      const date = String(payload.date || '');
+      const receivedToday = Number(payload.receivedToday);
+      const priorBalance = Number(payload.priorBalance);
+      const rawExpenses = Array.isArray(payload.expenses) ? payload.expenses : [];
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('تاريخ التسوية غير صحيح.');
+      if (!Number.isFinite(receivedToday) || receivedToday < 0 || !Number.isFinite(priorBalance) || priorBalance < 0) throw new Error('راجع المبلغ المستلم والرصيد السابق.');
+      if (rawExpenses.length > 100) throw new Error('لا يمكن إضافة أكثر من 100 بند في التسوية.');
+      const expenses = rawExpenses.map(item => {
+        const name = String(item && item.name || '').trim();
+        const amount = Number(item && item.amount);
+        const gratuity = Number(item && item.gratuity || 0);
+        if (!name || name.length > 150 || !Number.isFinite(amount) || amount < 0 || !Number.isFinite(gratuity) || gratuity < 0) throw new Error('راجع أسماء الجهات والمبالغ والإكراميات في بنود المصروفات.');
+        return {name,amount,gratuity};
+      });
+      const settlementId = 'settlement_' + safeId_(request.requestId || Utilities.getUuid());
+      const existing = getSettlements_().find(item => item.id === settlementId);
+      if (existing) return {ok:true,settlementId:existing.id,duplicateRequest:true};
+      const roundMoney = value => Math.round((value + Number.EPSILON) * 100) / 100;
+      const totalCash = roundMoney(receivedToday + priorBalance);
+      const spent = roundMoney(expenses.reduce((sum,item) => sum + item.amount + item.gratuity,0));
+      const remaining = roundMoney(totalCash - spent);
+      const settlement = {
+        id:settlementId,
+        ownerPhone:owner.phone,
+        repName:owner.name,
+        date,
+        receivedToday:roundMoney(receivedToday),
+        priorBalance:roundMoney(priorBalance),
+        totalCash,
+        expensesJson:JSON.stringify(expenses),
+        spent,
+        remaining,
+        createdAt:new Date().toISOString()
+      };
+      getSheet_(CONFIG.SETTLEMENTS_SHEET,SETTLEMENT_HEADERS).appendRow(SETTLEMENT_HEADERS.map(key => settlement[key] === undefined ? '' : settlement[key]));
+      pruneSettlements_();
+      return {ok:true,settlementId:settlement.id};
     }
     case 'add_extra_day': {
       const owner = admin ? findAccountByPhone_(payload.repPhone) : actor;
@@ -152,23 +192,6 @@ function handleAction_(request) {
       const index = rows.findIndex((row,i) => i > 0 && String(row[0]) === String(payload.id));
       if (index < 1) throw new Error('السجل غير موجود.');
       if (!admin && normalizePhone_(rows[index][1]) !== actor.phone) throw new Error('لا يمكنك حذف سجل مندوب آخر.');
-      sh.deleteRow(index + 1);
-      return {ok:true};
-    }
-    case 'add_analysis': {
-      const analysis = payload.analysis || {};
-      const clientName = String(analysis.clientName || '').trim();
-      if (!clientName) throw new Error('اسم العميل مطلوب لحفظ التحليل.');
-      const row = {id:'analysis_' + Utilities.getUuid(),ownerPhone:actor.phone,repName:actor.name,timestamp:Utilities.formatDate(new Date(),Session.getScriptTimeZone(),'yyyy-MM-dd HH:mm:ss'),clientName,emptyWeight:Number(analysis.emptyWeight)||0,beforeBoil:Number(analysis.beforeBoil)||0,afterBoil:Number(analysis.afterBoil)||0,sedimentWeight:Number(analysis.sedimentWeight)||0,waterPct:Number(analysis.waterPct)||0,sedimentPct:Number(analysis.sedimentPct)||0,acidPct:Number(analysis.acidPct)||0,deductionPerTon:Number(analysis.deductionPerTon)||0,createdAt:new Date().toISOString()};
-      getSheet_(CONFIG.ANALYSES_SHEET,ANALYSIS_HEADERS).appendRow(ANALYSIS_HEADERS.map(k => row[k] === undefined ? '' : row[k]));
-      return {ok:true,analysisId:row.id};
-    }
-    case 'delete_analysis': {
-      const sh = getSheet_(CONFIG.ANALYSES_SHEET,ANALYSIS_HEADERS);
-      const rows = sh.getDataRange().getValues();
-      const index = rows.findIndex((row,i) => i > 0 && String(row[0]) === String(payload.id));
-      if (index < 1) throw new Error('التحليل غير موجود.');
-      if (!admin && normalizePhone_(rows[index][1]) !== actor.phone) throw new Error('لا يمكنك حذف تحليل مندوب آخر.');
       sh.deleteRow(index + 1);
       return {ok:true};
     }
@@ -275,30 +298,49 @@ function getState_(phone,payload) {
   const page = Math.max(1,Number(payload.tripPage)||1);
   const extraPage = Math.max(1,Number(payload.extraPage)||1);
   const pageSize = 10;
-  let trips = getTrips_().filter(t => admin || normalizePhone_(t.ownerPhone) === user.phone);
+  const allTrips = getTrips_();
+  let trips = allTrips.filter(t => admin || normalizePhone_(t.ownerPhone) === user.phone);
   trips.sort((a,b) => String(b.date||'').localeCompare(String(a.date||'')) || String(b.timestamp||'').localeCompare(String(a.timestamp||'')));
   let extra = getExtraDays_().filter(t => admin || normalizePhone_(t.ownerPhone) === user.phone);
   extra.sort((a,b) => String(b.date||'').localeCompare(String(a.date||'')) || String(b.timestamp||'').localeCompare(String(a.timestamp||'')));
-  const approvedTrips = trips.filter(t => t.status === 'approved');
-  const pendingTrips = trips.filter(t => t.status === 'pending');
   const pendingExtraDays = extra.filter(t => t.status === 'pending');
-  let analyses = getAnalyses_().filter(a => admin || normalizePhone_(a.ownerPhone) === user.phone);
-  analyses.sort((a,b) => String(b.timestamp||'').localeCompare(String(a.timestamp||'')));
+  const accounts = admin ? getAccounts_() : [user];
+  const summaryMonth = /^\d{4}-\d{2}$/.test(String(payload.summaryMonth || ''))
+    ? String(payload.summaryMonth)
+    : Utilities.formatDate(new Date(),Session.getScriptTimeZone(),'yyyy-MM');
+  const monthTrips = trips.filter(trip => String(trip.date || '').slice(0,7) === summaryMonth);
+  const monthlySummary = admin ? accounts
+    .filter(account => account.role === 'rep' || monthTrips.some(trip => normalizePhone_(trip.ownerPhone) === account.phone))
+    .map(account => {
+      const ownTrips = monthTrips.filter(trip => normalizePhone_(trip.ownerPhone) === account.phone);
+      const dates = {};
+      ownTrips.forEach(trip => { dates[trip.date] = true; });
+      return {
+        repPhone:account.phone,
+        repName:account.name,
+        days:Object.keys(dates).length,
+        allowance:ownTrips.reduce((sum,trip) => sum + Number(trip.allowance || 0),0)
+      };
+    }) : [];
+  pruneSettlements_();
+  const settlements = getSettlements_()
+    .filter(item => admin || normalizePhone_(item.ownerPhone) === user.phone)
+    .sort((a,b) => String(b.date || '').localeCompare(String(a.date || '')) || String(b.createdAt || '').localeCompare(String(a.createdAt || '')))
+    .slice(0,10);
   return {
-    queueVersion:1,
+    queueVersion:3,
     user:publicAccount_(user),
-    accounts:(admin ? getAccounts_() : [user]).map(publicAccount_),
+    accounts:accounts.map(publicAccount_),
     trips:trips.slice((page-1)*pageSize,page*pageSize),
     tripCount:trips.length,
-    approvedTripCount:approvedTrips.length,
-    pendingTripCount:pendingTrips.length,
-    pendingTripIds:pendingTrips.map(t => t.id),
-    approvedAllowance:approvedTrips.reduce((sum,t) => sum + Number(t.allowance||0),0),
+    tripAllowanceTotal:trips.reduce((sum,t) => sum + Number(t.allowance||0),0),
+    monthlySummary,
+    summaryMonth,
     extraDays:extra.slice((extraPage-1)*pageSize,extraPage*pageSize),
     extraCount:extra.length,
     pendingExtraCount:pendingExtraDays.length,
     pendingExtraIds:pendingExtraDays.map(t => t.id),
-    analyses:analyses,
+    settlements,
     allowance:Number(getSetting_('defaultAllowance',CONFIG.DEFAULT_ALLOWANCE))
   };
 }
@@ -308,7 +350,7 @@ function ensureSheets_() {
   const accounts = getSheet_(CONFIG.ACCOUNTS_SHEET,ACCOUNT_HEADERS);
   const trips = getSheet_(CONFIG.TRIPS_SHEET,TRIP_HEADERS);
   const extraDays = getSheet_(CONFIG.EXTRA_DAYS_SHEET,EXTRA_HEADERS);
-  getSheet_(CONFIG.ANALYSES_SHEET,ANALYSIS_HEADERS);
+  getSheet_(CONFIG.SETTLEMENTS_SHEET,SETTLEMENT_HEADERS);
   const settings = getSheet_(CONFIG.SETTINGS_SHEET,SETTING_HEADERS);
   ensureReviewColumns_(trips,TRIP_HEADERS);
   ensureReviewColumns_(extraDays,EXTRA_HEADERS);
@@ -460,7 +502,7 @@ function getSheet_(name,headers) {
   sh.setRightToLeft(true);
   if (name === CONFIG.ACCOUNTS_SHEET) sh.getRange('C:C').setNumberFormat('@');
   if (name === CONFIG.TRIPS_SHEET || name === CONFIG.EXTRA_DAYS_SHEET) sh.getRange('B:B').setNumberFormat('@');
-  if (name === CONFIG.ANALYSES_SHEET) sh.getRange('B:B').setNumberFormat('@');
+  if (name === CONFIG.SETTLEMENTS_SHEET) sh.getRange('B:B').setNumberFormat('@');
   return sh;
 }
 
@@ -497,11 +539,55 @@ function getExtraDays_() {
   }));
 }
 
-function getAnalyses_() {
-  const sh = getSheet_(CONFIG.ANALYSES_SHEET,ANALYSIS_HEADERS);
-  return sh.getDataRange().getValues().slice(1).filter(row => row[0]).map(row => ({
-    id:String(row[0]),ownerPhone:normalizePhone_(row[1]),repName:String(row[2]||''),timestamp:String(row[3]||''),clientName:String(row[4]||''),emptyWeight:Number(row[5])||0,beforeBoil:Number(row[6])||0,afterBoil:Number(row[7])||0,sedimentWeight:Number(row[8])||0,waterPct:Number(row[9])||0,sedimentPct:Number(row[10])||0,acidPct:Number(row[11])||0,deductionPerTon:Number(row[12])||0,createdAt:String(row[13]||'')
-  }));
+function getSettlements_() {
+  const sh = getSheet_(CONFIG.SETTLEMENTS_SHEET,SETTLEMENT_HEADERS);
+  const values = sh.getDataRange().getValues();
+  const headers = values[0].map(value => String(value||'').trim());
+  const column = name => headers.indexOf(name);
+  return values.slice(1).filter(row => row[0]).map(row => {
+    let expenses;
+    try {
+      expenses = JSON.parse(String(row[column('expensesJson')] || '[]'));
+    } catch (error) {
+      throw new Error('تعذر قراءة بنود تسوية محفوظة في Google Sheets.');
+    }
+    if (!Array.isArray(expenses)) throw new Error('تنسيق بنود تسوية محفوظة غير صحيح.');
+    return {
+      id:String(row[column('id')] || ''),
+      ownerPhone:normalizePhone_(row[column('ownerPhone')]),
+      repName:String(row[column('repName')] || ''),
+      date:formatDate_(row[column('date')]),
+      receivedToday:Number(row[column('receivedToday')]) || 0,
+      priorBalance:Number(row[column('priorBalance')]) || 0,
+      totalCash:Number(row[column('totalCash')]) || 0,
+      expenses:expenses.map(item => ({name:String(item.name || ''),amount:Number(item.amount) || 0,gratuity:Number(item.gratuity) || 0})),
+      spent:Number(row[column('spent')]) || 0,
+      remaining:Number(row[column('remaining')]) || 0,
+      createdAt:String(row[column('createdAt')] || '')
+    };
+  });
+}
+
+function pruneSettlements_() {
+  const sheet = getSheet_(CONFIG.SETTLEMENTS_SHEET,SETTLEMENT_HEADERS);
+  const values = sheet.getDataRange().getValues();
+  if (values.length <= 11) return;
+  const headers = values[0].map(value => String(value||'').trim());
+  const createdAtIndex = headers.indexOf('createdAt');
+  const records = values.slice(1)
+    .map((row,index) => ({
+      rowNumber:index + 2,
+      id:String(row[0] || ''),
+      createdAt:String(createdAtIndex >= 0 ? row[createdAtIndex] || '' : '')
+    }))
+    .filter(record => record.id)
+    .sort((a,b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))
+    .slice(0,10);
+  const keepRows = {};
+  records.forEach(record => { keepRows[record.rowNumber] = true; });
+  for (let rowNumber=values.length; rowNumber>=2; rowNumber--) {
+    if (!keepRows[rowNumber]) sheet.deleteRow(rowNumber);
+  }
 }
 
 function saveProofImage_(dataUrl,name,type) {
