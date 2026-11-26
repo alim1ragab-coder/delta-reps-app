@@ -1,5 +1,5 @@
-const CACHE_NAME = "tagaddod-cache-settlement-v49";
-const APP_SHELL = ["./", "./index.html", "./styles.css?v=settlement-v9", "./app.js?v=settlement-v9", "./analysis.js?v=share-only-v11", "./manifest.json", "./icon.png", "./icon.svg"];
+const CACHE_NAME = "tagaddod-cache-settlement-v50";
+const APP_SHELL = ["./", "./index.html", "./styles.css?v=settlement-v9", "./app.js?v=settlement-v10", "./analysis.js?v=share-only-v11", "./manifest.json", "./icon.png", "./icon.svg"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
