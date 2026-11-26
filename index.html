@@ -52,7 +52,7 @@
 
   <main>
     <section id="authSection" class="panel auth-panel hidden">
-      <div class="panel-head"><h2 id="authTitle">تسجيل الدخول</h2><button id="backToSamplesBtn" class="secondary" type="button">رجوع للتحليل</button></div>
+      <div class="panel-head"><h2 id="authTitle">تسجيل الدخول</h2><button id="backToSamplesBtn" class="secondary" type="button">القائمة الرئيسية</button></div>
       <p id="authHint" class="muted">أدخل رقم التليفون والرقم السري المسجل.</p>
       <p id="loginProgressMessage" class="login-progress-message hidden" role="status" aria-live="polite">جاري تسجيل الدخول... من فضلك انتظر ولا تغلق الصفحة.</p>
       <form id="loginForm" class="form-grid one-column">
@@ -99,8 +99,10 @@
         </div>
         <button id="guestLoginBtn" class="primary" type="button">تسجيل الدخول</button>
       </section>
+
       <nav class="tabs" aria-label="أقسام التطبيق">
-        <button class="tab-btn active" data-tab="analysisTab" type="button">تحليل العينات</button>
+        <button class="tab-btn active" data-tab="homeTab" type="button">القائمة الرئيسية</button>
+        <button class="tab-btn" data-tab="analysisTab" type="button">تحليل العينات</button>
         <button class="tab-btn" data-tab="newTripTab" type="button">تسجيل بدل السفر</button>
         <button class="tab-btn" data-tab="extraDayTab" type="button">تسجيل يوم عمل إضافي</button>
         <button class="tab-btn" data-tab="recordsTab" type="button">السجلات</button>
@@ -108,7 +110,80 @@
         <button class="tab-btn admin-only hidden" data-tab="adminTab" type="button">إدارة النظام</button>
       </nav>
 
-      <section id="analysisTab" class="tab-panel active">
+      <section id="homeTab" class="tab-panel active">
+        <div class="panel home-launcher-panel">
+          <div class="home-launcher-head">
+            <h2>القائمة الرئيسية</h2>
+            <p class="muted">اختر القسم المطلوب للدخول إليه مباشرة</p>
+          </div>
+          <div class="home-grid">
+            <button class="home-tile home-tile-featured" type="button" data-open-tab="analysisTab">
+              <div class="home-tile-top">
+                <span class="home-tile-icon" aria-hidden="true">🧪</span>
+                <span class="home-tile-pill">متاح للجميع</span>
+              </div>
+              <strong class="home-tile-title">تحليل العينات</strong>
+              <span class="home-tile-desc">حساب نسب المياه والرواسب والأحماض والخصم ومشاركة صورة التحليل</span>
+              <span class="home-tile-cta">▶ فتح تحليل العينات</span>
+            </button>
+
+            <button class="home-tile" type="button" data-open-tab="newTripTab">
+              <div class="home-tile-top">
+                <span class="home-tile-icon" aria-hidden="true">🛣️</span>
+                <span class="home-tile-pill">رحلات</span>
+              </div>
+              <strong class="home-tile-title">تسجيل بدل السفر</strong>
+              <span class="home-tile-desc">إضافة رحلة جديدة وتسجيل المكان والعميل وبدل السفر</span>
+              <span class="home-tile-cta">▶ دخول القسم</span>
+            </button>
+
+            <button class="home-tile" type="button" data-open-tab="extraDayTab">
+              <div class="home-tile-top">
+                <span class="home-tile-icon" aria-hidden="true">➕</span>
+                <span class="home-tile-pill">إضافي</span>
+              </div>
+              <strong class="home-tile-title">تسجيل يوم عمل إضافي</strong>
+              <span class="home-tile-desc">تسجيل يوم إضافي مع السبب وإرفاق صورة الإثبات</span>
+              <span class="home-tile-cta">▶ دخول القسم</span>
+            </button>
+
+            <button class="home-tile" type="button" data-open-tab="settlementTab">
+              <div class="home-tile-top">
+                <span class="home-tile-icon" aria-hidden="true">💼</span>
+                <span class="home-tile-pill">عهدة</span>
+              </div>
+              <strong class="home-tile-title">تسوية العهدة</strong>
+              <span class="home-tile-desc">حساب العهدة والمصروفات والإكراميات والمتبقي ومشاركة الصورة</span>
+              <span class="home-tile-cta">▶ دخول القسم</span>
+            </button>
+
+            <button class="home-tile" type="button" data-open-tab="recordsTab">
+              <div class="home-tile-top">
+                <span class="home-tile-icon" aria-hidden="true">📋</span>
+                <span class="home-tile-pill">سجلات</span>
+              </div>
+              <strong class="home-tile-title">السجلات</strong>
+              <span class="home-tile-desc">استعراض سجل الرحلات والأيام الإضافية والملخص وتصدير Excel</span>
+              <span class="home-tile-cta">▶ دخول القسم</span>
+            </button>
+
+            <button class="home-tile admin-only hidden" type="button" data-open-tab="adminTab">
+              <div class="home-tile-top">
+                <span class="home-tile-icon" aria-hidden="true">⚙️</span>
+                <span class="home-tile-pill">مشرف</span>
+              </div>
+              <strong class="home-tile-title">إدارة النظام</strong>
+              <span class="home-tile-desc">إدارة الحسابات وقيمة بدل السفر الافتراضي والمزامنة</span>
+              <span class="home-tile-cta">▶ دخول الإدارة</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section id="analysisTab" class="tab-panel">
+        <div class="section-back-bar">
+          <button class="secondary back-to-home-btn" type="button">← القائمة الرئيسية</button>
+        </div>
         <div class="panel lab-showcase-panel">
           <h2 class="lab-showcase-title">تحليل عينة</h2>
           <div class="lab-showcase-divider"></div>
@@ -182,10 +257,12 @@
           </div>
           <p class="muted lab-note-center">السماح للأحماض 3%، والسماح للمياه والرواسب معًا 2%. كل زيادة 1% تُحسب 10 كجم لكل طن.</p>
         </div>
-
       </section>
 
       <section id="newTripTab" class="tab-panel">
+        <div class="section-back-bar">
+          <button class="secondary back-to-home-btn" type="button">← القائمة الرئيسية</button>
+        </div>
         <div class="panel">
           <h2>تسجيل بدل السفر</h2>
           <form id="tripForm" class="form-grid">
@@ -198,10 +275,12 @@
           </form>
           <p class="muted">لو الإنترنت فاصل، تتحفظ الرحلة مؤقتًا على الجهاز وتُرسل تلقائيًا عند عودة الاتصال.</p>
         </div>
-
       </section>
 
       <section id="extraDayTab" class="tab-panel">
+        <div class="section-back-bar">
+          <button class="secondary back-to-home-btn" type="button">← القائمة الرئيسية</button>
+        </div>
         <div class="panel">
           <h2>تسجيل يوم عمل إضافي</h2>
           <form id="extraDayForm" class="form-grid">
@@ -213,10 +292,12 @@
           </form>
           <p class="muted">إرفاق صورة إثبات. لو الإنترنت فاصل، يتحفظ الطلب مؤقتًا على الجهاز ويرتفع عند عودة الاتصال.</p>
         </div>
-
       </section>
 
       <section id="recordsTab" class="tab-panel">
+        <div class="section-back-bar">
+          <button class="secondary back-to-home-btn" type="button">← القائمة الرئيسية</button>
+        </div>
         <div class="panel monthly-summary-panel admin-only hidden">
           <div class="panel-head">
             <h2>ملخص بدل السفر الشهري</h2>
@@ -292,6 +373,9 @@
       </section>
 
       <section id="settlementTab" class="tab-panel">
+        <div class="section-back-bar">
+          <button class="secondary back-to-home-btn" type="button">← القائمة الرئيسية</button>
+        </div>
         <div class="panel">
           <h2>تسوية العهدة</h2>
           <p class="muted">تُحفظ التسوية على الجهاز عند انقطاع الإنترنت، ثم تُزامَن مع Google Sheets تلقائيًا عند عودة الاتصال.</p>
@@ -303,9 +387,11 @@
             <div class="settlement-expenses-field">
               <div class="panel-head">
                 <h3>المبالغ المصروفة</h3>
-                <button id="addSettlementExpenseBtn" class="secondary" type="button">إضافة بند</button>
               </div>
               <div id="settlementExpenses" class="settlement-expenses"></div>
+              <div class="settlement-add-expense-wrap">
+                <button id="addSettlementExpenseBtn" class="secondary" type="button">+ إضافة بند</button>
+              </div>
             </div>
             <div class="settlement-totals" aria-live="polite">
               <div><span>إجمالي المبلغ معك</span><strong id="settlementTotalCash">0.00 جنيه</strong></div>
@@ -331,6 +417,9 @@
       </section>
 
       <section id="adminTab" class="tab-panel">
+        <div class="section-back-bar">
+          <button class="secondary back-to-home-btn" type="button">← القائمة الرئيسية</button>
+        </div>
         <div class="panel">
           <h2>بدل السفر الافتراضي</h2>
           <div class="inline-form"><label>قيمة البدل (جنيه)<input id="defaultAllowanceInput" type="number" min="0" step="0.01"></label><button id="saveAllowanceBtn" class="primary" type="button">حفظ البدل</button></div>

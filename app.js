@@ -1094,107 +1094,165 @@
     const totalCash = settlement.receivedToday + settlement.priorBalance;
     const spent = settlement.expenses.reduce((sum, expense) => sum + expense.amount + expense.gratuity, 0);
     const remaining = totalCash - spent;
-    const width = 720;
+
+    const sheetLines = [];
+    settlement.expenses.forEach((expense) => {
+      sheetLines.push({ label: expense.name, value: formatMoney(expense.amount), highlight: false });
+      if (expense.gratuity > 0) {
+        sheetLines.push({ label: `إكرامية ${expense.name}`, value: formatMoney(expense.gratuity), highlight: false });
+      }
+    });
+
+    const totalRows = Math.max(20, sheetLines.length);
+    const width = 900;
     const left = 40;
     const right = width - 40;
     const tableWidth = right - left;
-    const rowHeights = settlement.expenses.map((expense) => expense.gratuity > 0 ? 106 : 72);
-    const headerHeight = 54;
-    const tableHeight = headerHeight + rowHeights.reduce((sum, rowHeight) => sum + rowHeight, 0);
-    const height = Math.max(820, 620 + tableHeight);
+    const numColWidth = 64;
+    const amtColWidth = 220;
+    const numDivider = right - numColWidth;
+    const amtDivider = left + amtColWidth;
+    const descMaxWidth = numDivider - amtDivider - 28;
+
+    const topSectionHeight = 160;
+    const headerRowHeight = 46;
+    const dataRowHeight = 36;
+    const summaryRowHeight = 42;
+    const summaryGap = 14;
+    const summaryCount = 5;
+    const height = topSectionHeight + headerRowHeight + (totalRows * dataRowHeight) + summaryGap + (summaryCount * summaryRowHeight) + 54;
+
     const canvas = document.createElement("canvas");
     canvas.width = width;
     canvas.height = height;
     const context = canvas.getContext("2d");
     if (!context) throw new Error("تعذر تجهيز صورة التسوية.");
-    context.fillStyle = "#e5e7eb";
-    context.fillRect(0, 0, width, height);
+
     context.fillStyle = "#ffffff";
-    context.fillRect(16, 16, width - 32, height - 32);
+    context.fillRect(0, 0, width, height);
     context.direction = "rtl";
+
     context.textAlign = "center";
-    context.fillStyle = "#881337";
-    context.font = "800 42px 'Segoe UI', Tahoma, sans-serif";
-    context.fillText("تسوية العهدة", width / 2, 82);
-    context.fillStyle = "#1f2937";
-    context.font = "700 22px 'Segoe UI', Tahoma, sans-serif";
-    context.fillText(`المندوب: ${settlement.repName}  |  التاريخ: ${settlement.date}`, width / 2, 132, width - 80);
-    context.fillStyle = "#f3f4f6";
-    context.fillRect(40, 165, width - 80, 135);
-    context.font = "700 21px 'Segoe UI', Tahoma, sans-serif";
-    context.fillStyle = "#374151";
+    context.fillStyle = "#e11d21";
+    context.font = "900 38px 'Segoe UI', Tahoma, sans-serif";
+    context.fillText("TAGADDOD", width / 2, 46);
+
+    const dateBoxTop = 62;
+    const dateBoxHeight = 44;
+    context.strokeStyle = "#111827";
+    context.lineWidth = 2.5;
+    context.strokeRect(left, dateBoxTop, tableWidth, dateBoxHeight);
     context.textAlign = "right";
-    context.fillText(`المبلغ المستلم اليوم: ${formatMoney(settlement.receivedToday)}`, right - 20, 220, tableWidth - 40);
-    context.fillText(`الرصيد المتبقي من رحلات سابقة: ${formatMoney(settlement.priorBalance)}`, right - 20, 270, tableWidth - 40);
-    const tableTop = 330;
-    const numberDivider = right - 54;
-    const amountDivider = left + 145;
-    let top = tableTop;
+    context.fillStyle = "#111827";
+    context.font = "800 22px 'Segoe UI', Tahoma, sans-serif";
+    context.fillText(`بيان مصروفات يوم ${settlement.date}`, right - 18, dateBoxTop + 30, tableWidth - 36);
+
+    const repBoxTop = dateBoxTop + dateBoxHeight;
+    const repBoxHeight = 44;
+    context.strokeRect(left, repBoxTop, tableWidth, repBoxHeight);
+    context.textAlign = "center";
+    context.font = "800 22px 'Segoe UI', Tahoma, sans-serif";
+    context.fillText(`اسم المندوب : ${settlement.repName}`, width / 2, repBoxTop + 30, tableWidth - 36);
+
+    let y = repBoxTop + repBoxHeight;
+
     context.fillStyle = "#d1d5db";
-    context.fillRect(left, top, tableWidth, headerHeight);
-    context.strokeStyle = "#6b7280";
-    context.lineWidth = 2;
-    context.strokeRect(left, top, tableWidth, headerHeight);
-    context.textAlign = "right";
-    context.fillStyle = "#1f2937";
-    context.font = "800 21px 'Segoe UI', Tahoma, sans-serif";
-    context.fillText("م", right - 15, top + 36);
-    context.fillText("البيان", numberDivider - 14, top + 36, numberDivider - amountDivider - 24);
-    context.textAlign = "center";
-    context.fillText("المبلغ", left + 72, top + 36);
+    context.fillRect(left, y, tableWidth, headerRowHeight);
+    context.strokeStyle = "#111827";
+    context.lineWidth = 2.5;
+    context.strokeRect(left, y, tableWidth, headerRowHeight);
+
+    context.lineWidth = 1.8;
     context.beginPath();
-    context.moveTo(numberDivider, top);
-    context.lineTo(numberDivider, top + headerHeight);
-    context.moveTo(amountDivider, top);
-    context.lineTo(amountDivider, top + headerHeight);
+    context.moveTo(numDivider, y);
+    context.lineTo(numDivider, y + headerRowHeight);
+    context.moveTo(amtDivider, y);
+    context.lineTo(amtDivider, y + headerRowHeight);
     context.stroke();
-    top += headerHeight;
-    settlement.expenses.forEach((expense, index) => {
-      const rowHeight = rowHeights[index];
-      context.fillStyle = index % 2 === 0 ? "#ffffff" : "#f3f4f6";
-      context.fillRect(left, top, tableWidth, rowHeight);
-      context.strokeStyle = "#9ca3af";
+
+    context.fillStyle = "#111827";
+    context.font = "800 21px 'Segoe UI', Tahoma, sans-serif";
+    context.textAlign = "center";
+    context.fillText("م", numDivider + (numColWidth / 2), y + 30);
+    context.fillText("بيان", amtDivider + (descMaxWidth + 28) / 2, y + 30);
+    context.fillText("المبلغ", left + (amtColWidth / 2), y + 30);
+
+    y += headerRowHeight;
+
+    for (let i = 0; i < totalRows; i += 1) {
+      const line = sheetLines[i] || null;
+      const isFilled = Boolean(line);
+
+      context.fillStyle = isFilled ? "#b7e4c7" : "#ffffff";
+      context.fillRect(left, y, tableWidth, dataRowHeight);
+
+      context.strokeStyle = "#111827";
       context.lineWidth = 1.5;
-      context.strokeRect(left, top, tableWidth, rowHeight);
+      context.strokeRect(left, y, tableWidth, dataRowHeight);
+
       context.beginPath();
-      context.moveTo(numberDivider, top);
-      context.lineTo(numberDivider, top + rowHeight);
-      context.moveTo(amountDivider, top);
-      context.lineTo(amountDivider, top + rowHeight);
+      context.moveTo(numDivider, y);
+      context.lineTo(numDivider, y + dataRowHeight);
+      context.moveTo(amtDivider, y);
+      context.lineTo(amtDivider, y + dataRowHeight);
       context.stroke();
-      context.textAlign = "right";
+
       context.fillStyle = "#111827";
-      context.font = "700 19px 'Segoe UI', Tahoma, sans-serif";
-      context.fillText(String(index + 1), right - 15, top + 37);
-      context.fillText(expense.name, numberDivider - 14, top + 37, numberDivider - amountDivider - 24);
+      context.font = "700 18px 'Segoe UI', Tahoma, sans-serif";
       context.textAlign = "center";
-      context.fillText(formatMoney(expense.amount), left + 72, top + 37, amountDivider - left - 18);
-      if (expense.gratuity > 0) {
-        context.textAlign = "right";
-        context.fillStyle = "#6b7280";
-        context.font = "600 16px 'Segoe UI', Tahoma, sans-serif";
-        context.fillText(`إكرامية ${expense.name}`, numberDivider - 14, top + 78, numberDivider - amountDivider - 24);
+      context.fillText(String(i + 1), numDivider + (numColWidth / 2), y + 25);
+
+      if (line) {
         context.textAlign = "center";
-        context.fillText(formatMoney(expense.gratuity), left + 72, top + 78, amountDivider - left - 18);
+        context.font = "italic 700 19px 'Segoe UI', Tahoma, sans-serif";
+        context.fillText(line.label, amtDivider + (descMaxWidth + 28) / 2, y + 25, descMaxWidth);
+
+        context.textAlign = "center";
+        context.font = "700 18px 'Segoe UI', Tahoma, sans-serif";
+        context.fillText(line.value, left + (amtColWidth / 2), y + 25, amtColWidth - 16);
       }
-      top += rowHeight;
+
+      y += dataRowHeight;
+    }
+
+    y += summaryGap;
+
+    const summaryRows = [
+      { label: "المبلغ المستلم اليوم", value: formatMoney(settlement.receivedToday) },
+      { label: "المبلغ المتبقي من رحلات سابقة", value: formatMoney(settlement.priorBalance) },
+      { label: "إجمالي رصيد العهدة", value: formatMoney(totalCash) },
+      { label: "اجمالي المصروفات", value: formatMoney(spent) },
+      { label: "الرصيد المتبقي", value: formatMoney(remaining) }
+    ];
+
+    summaryRows.forEach((row) => {
+      context.fillStyle = "#ffffff";
+      context.fillRect(left, y, tableWidth, summaryRowHeight);
+
+      context.strokeStyle = "#111827";
+      context.lineWidth = 2;
+      context.strokeRect(left, y, tableWidth, summaryRowHeight);
+
+      context.beginPath();
+      context.moveTo(amtDivider, y);
+      context.lineTo(amtDivider, y + summaryRowHeight);
+      context.stroke();
+
+      context.fillStyle = "#111827";
+      context.font = "800 20px 'Segoe UI', Tahoma, sans-serif";
+      context.textAlign = "center";
+      context.fillText(row.label, amtDivider + (right - amtDivider) / 2, y + 28, (right - amtDivider) - 24);
+      context.fillText(row.value, left + (amtColWidth / 2), y + 28, amtColWidth - 16);
+
+      y += summaryRowHeight;
     });
-    top += 24;
-    context.fillStyle = "#f3f4f6";
-    context.fillRect(40, top, width - 80, 180);
-    context.textAlign = "right";
-    context.fillStyle = "#374151";
-    context.font = "700 21px 'Segoe UI', Tahoma, sans-serif";
-    context.fillText(`إجمالي المبلغ معك: ${formatMoney(totalCash)}`, right - 20, top + 42, tableWidth - 40);
-    context.fillText(`إجمالي المصروف اليوم: ${formatMoney(spent)}`, right - 20, top + 92, tableWidth - 40);
-    context.fillStyle = remaining < 0 ? "#b91c1c" : "#166534";
-    context.font = "800 27px 'Segoe UI', Tahoma, sans-serif";
-    context.fillText(`المتبقي معك: ${formatMoney(remaining)}`, right - 20, top + 148, tableWidth - 40);
+
     context.direction = "ltr";
     context.textAlign = "center";
     context.fillStyle = "#6b7280";
-    context.font = "700 20px 'Segoe UI', Tahoma, sans-serif";
-    context.fillText("Structured by ALI M. RAGAB  •  TAGADDOD", width / 2, height - 38);
+    context.font = "700 16px 'Segoe UI', Tahoma, sans-serif";
+    context.fillText("Structured by ALI M. RAGAB  •  TAGADDOD", width / 2, height - 18);
+
     const dataUrl = canvas.toDataURL("image/png");
     const blob = await new Promise((resolve, reject) => canvas.toBlob((result) =>
       result ? resolve(result) : reject(new Error("تعذر إنشاء ملف صورة للتسوية.")), "image/png"));
@@ -1305,7 +1363,7 @@
       const loaded = await pullState(false);
       if (!loaded) throw new Error(`تم تسجيل الدخول، لكن تعذر تحميل بيانات الحساب: ${lastStateError || "خطأ غير معروف من الخادم."}`);
       setView("app");
-      switchTab("analysisTab");
+      switchTab("homeTab");
       setStatus("تم تسجيل الدخول ومزامنة البيانات.", "success");
       await syncMutationQueue();
     } catch (error) {
@@ -1639,7 +1697,7 @@
     $("loginForm").addEventListener("submit", (event) => { event.preventDefault(); login(); });
     $("openLoginFromSamplesBtn").addEventListener("click", openLogin);
     $("guestLoginBtn").addEventListener("click", openLogin);
-    ["backToSamplesBtn", "cancelLoginBtn"].forEach((id) => $(id).addEventListener("click", () => { setView("app"); switchTab("analysisTab"); }));
+    ["backToSamplesBtn", "cancelLoginBtn"].forEach((id) => $(id).addEventListener("click", () => { setView("app"); switchTab("homeTab"); }));
     $("openChangePassBtn").addEventListener("click", () => { $("updatePhoneInput").value = ""; $("updatePhoneInput").placeholder = state.user?.phone || "اتركه فارغًا دون تغيير"; setView("profile"); });
     $("closeProfileModalBtn").addEventListener("click", () => setView("app"));
     bindProgressClick($("saveProfileChangesBtn"), "جاري تجهيز التعديلات...", saveProfile);
@@ -1653,10 +1711,12 @@
       cacheState();
       renderHeader();
       setView("app");
-      switchTab("analysisTab");
+      switchTab("homeTab");
       showToast("تم تسجيل الخروج.", "success");
     });
     document.querySelectorAll(".tab-btn").forEach((button) => button.addEventListener("click", () => switchTab(button.dataset.tab)));
+    document.querySelectorAll("[data-open-tab]").forEach((tile) => tile.addEventListener("click", () => switchTab(tile.dataset.openTab)));
+    document.querySelectorAll(".back-to-home-btn").forEach((button) => button.addEventListener("click", () => switchTab("homeTab")));
     $("tripForm").addEventListener("submit", (event) => {
       event.preventDefault();
       const form = event.currentTarget;
@@ -1778,7 +1838,7 @@
     renderHeader();
     renderAll();
     setView("app");
-    switchTab("analysisTab");
+    switchTab("homeTab");
     setConnectionBadge();
 
     if (sessionToken()) {
